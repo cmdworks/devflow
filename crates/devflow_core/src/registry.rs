@@ -3,7 +3,7 @@ use devflow_protocol::{Device, Platform, SessionState, SessionStatus};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tracing::{debug, warn};
+use tracing::debug;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KnownProject {
@@ -101,8 +101,8 @@ impl GlobalRegistry {
         match fs::read_to_string(&file_path) {
             Ok(content) => match serde_json::from_str::<Vec<KnownProject>>(&content) {
                 Ok(list) => list.into_iter().filter(|p| Path::new(&p.path).exists()).collect(),
-                Err(e) => {
-                    warn!("Failed to parse projects.json: {}", e);
+                Err(_) => {
+                    let _ = fs::write(&file_path, "[]");
                     Vec::new()
                 }
             },
