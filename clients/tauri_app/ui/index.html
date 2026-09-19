@@ -3,185 +3,181 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DevFlow — Desktop Companion</title>
+  <title>DevFlow Desktop</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="app" class="app-layout">
-    <!-- Top Header Navigation Bar -->
-    <header class="app-header">
-      <div class="brand-section">
-        <div class="logo-badge">
-          <span class="logo-icon">⚡</span>
-          <span class="logo-text">DevFlow</span>
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- Top Bar: Workspace Context, Global Controls, Devices, Doctor      -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <header class="workspace-top-bar">
+      <!-- Brand & Workspace Selector -->
+      <div class="top-left-section">
+        <div class="brand-badge">
+          <span class="brand-icon">⚡</span>
+          <span class="brand-name">DevFlow</span>
         </div>
-        <span class="version-tag">Companion v0.1.0</span>
+
+        <div class="workspace-pill" id="workspacePill" title="Current Workspace Directory">
+          <span class="ws-icon">📂</span>
+          <span class="ws-name" id="wsNameDisplay">Loading...</span>
+          <input type="text" id="wsPathInput" class="ws-input hidden" placeholder="/path/to/workspace">
+          <button id="btnSwitchWs" class="btn-xs" title="Change Workspace Path">✎</button>
+        </div>
       </div>
 
-      <div class="connection-bar">
-        <div class="server-input-group">
-          <span class="input-icon">🌐</span>
-          <input type="text" id="serverUrl" value="http://localhost:9090" placeholder="Server URL" title="DevFlow MCP HTTP Server URL">
+      <!-- Workspace Global Actions -->
+      <div class="top-actions-section">
+        <button id="btnGlobalRunAll" class="btn-top-action btn-run-all" title="Launch all workspace targets in parallel">
+          <span class="action-icon">▶</span>
+          <span>Run All</span>
+        </button>
+        <button id="btnGlobalReloadAll" class="btn-top-action btn-reload-all" title="Send hot-reload signal to all running targets">
+          <span class="action-icon">⚡</span>
+          <span>Reload All</span>
+        </button>
+        <button id="btnGlobalRestartAll" class="btn-top-action btn-restart-all" title="Full restart all running targets">
+          <span class="action-icon">🔄</span>
+          <span>Restart All</span>
+        </button>
+        <button id="btnGlobalStopAll" class="btn-top-action btn-stop-all" title="Stop all running sessions">
+          <span class="action-icon">■</span>
+          <span>Stop All</span>
+        </button>
+      </div>
+
+      <!-- Connected Devices Status in Top Bar -->
+      <div class="top-right-section">
+        <div class="top-devices-bar" id="topDevicesBar" title="Connected Hardware & Emulators">
+          <div class="device-pill">
+            <span class="pulse-dot green"></span>
+            <span class="dev-label">Detecting devices...</span>
+          </div>
         </div>
-        <div class="token-input-group">
-          <span class="input-icon">🔑</span>
-          <input type="password" id="authToken" placeholder="Auth Token (optional)" title="Bearer Token">
-        </div>
-        <button id="btnConnect" class="btn-primary">Connect</button>
-        <div id="connectionStatus" class="status-badge disconnected">
-          <span class="pulse-dot"></span>
-          <span class="status-label">Disconnected</span>
-        </div>
+
+        <button id="btnTopDoctor" class="btn-top-tool" title="Run Toolchain & SDK Diagnostics">
+          <span class="tool-icon">🩺</span>
+          <span>Doctor</span>
+        </button>
       </div>
     </header>
 
-    <!-- Main Content Area -->
-    <main class="main-container">
-      <!-- Left Sidebar: Devices, Session, Actions -->
-      <aside class="sidebar-panel">
-        <!-- Target Devices Section -->
-        <section class="card devices-card">
-          <div class="card-header">
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- Main Shell: Sidebar + Dynamic Panes Viewport                      -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <div class="main-shell">
+      <!-- Left Sidebar: Sub-projects, Combine All, Devices, Global Sync -->
+      <aside class="workspace-sidebar">
+        <!-- Sub-Projects Explorer Section -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>📂 Sub-Projects & Targets</h3>
+            <span class="badge-count" id="targetCountBadge">0</span>
+          </div>
+          <div class="sidebar-hint">Click a sub-project to open its log pane</div>
+          <div id="subProjectsList" class="subprojects-list">
+            <div class="sidebar-empty">Scanning for runnable targets...</div>
+          </div>
+
+          <!-- Combine All Option -->
+          <div class="combine-all-card" id="btnCombineAll" title="Open unified aggregated stream for all projects">
+            <div class="card-left">
+              <span class="combine-icon">🌐</span>
+              <div class="combine-text">
+                <span class="combine-title">Combine All in One</span>
+                <span class="combine-subtitle">Aggregated multi-project stream</span>
+              </div>
+            </div>
+            <span class="open-arrow">＋</span>
+          </div>
+        </div>
+
+        <!-- Connected Hardware & Emulators -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
             <h3>📱 Devices & Emulators</h3>
-            <button id="btnRefreshDevices" class="btn-icon" title="Refresh Devices">↻</button>
+            <button id="btnRefreshDevices" class="btn-icon-xs" title="Refresh Devices">↻</button>
           </div>
-          <div id="devicesList" class="devices-list">
-            <div class="empty-state">No devices discovered yet</div>
+          <div id="sidebarDevicesList" class="devices-list">
+            <div class="sidebar-empty">No devices found</div>
           </div>
-          <div class="boot-emulator-bar">
-            <input type="text" id="emulatorNameInput" placeholder="AVD / Simulator Name">
-            <button id="btnBootEmulator" class="btn-secondary">Boot</button>
+          <div class="boot-emulator-row">
+            <input type="text" id="emulatorInput" placeholder="AVD / Simulator Name">
+            <button id="btnBootEmu" class="btn-xs">Boot</button>
           </div>
-        </section>
+        </div>
 
-        <!-- Active Session Status Section -->
-        <section class="card session-card">
-          <div class="card-header">
-            <h3>⚡ Active Session</h3>
-            <span id="sessionStatusPill" class="pill pill-idle">Idle</span>
+        <!-- Cross-Terminal Live Sessions -->
+        <div class="sidebar-section">
+          <div class="sidebar-section-header">
+            <h3>⚡ External Terminal Sync</h3>
           </div>
-          <div class="session-details">
-            <div class="detail-row">
-              <span class="detail-label">Project:</span>
-              <span id="sessionProject" class="detail-value">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Framework:</span>
-              <span id="sessionFramework" class="detail-value">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Target:</span>
-              <span id="sessionTarget" class="detail-value">—</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Build Duration:</span>
-              <span id="sessionBuildTime" class="detail-value">—</span>
-            </div>
-            <div class="metrics-grid">
-              <div class="metric-box">
-                <span class="metric-value" id="reloadCount">0</span>
-                <span class="metric-label">Reloads</span>
-              </div>
-              <div class="metric-box">
-                <span class="metric-value" id="restartCount">0</span>
-                <span class="metric-label">Restarts</span>
-              </div>
-            </div>
+          <div id="externalSessionsList" class="sessions-list">
+            <div class="sidebar-empty">No other terminals active</div>
           </div>
-        </section>
-
-        <!-- Quick Action Bar -->
-        <section class="card actions-card">
-          <div class="card-header">
-            <h3>🎮 Controls</h3>
-          </div>
-          <div class="actions-grid">
-            <button id="btnReload" class="btn-action btn-reload">
-              <span class="action-icon">⚡</span>
-              <span class="action-text">Reload</span>
-            </button>
-            <button id="btnRestart" class="btn-action btn-restart">
-              <span class="action-icon">🔄</span>
-              <span class="action-text">Restart</span>
-            </button>
-            <button id="btnBuild" class="btn-action btn-build">
-              <span class="action-icon">🔨</span>
-              <span class="action-text">Build</span>
-            </button>
-            <button id="btnDoctor" class="btn-action btn-doctor">
-              <span class="action-icon">🩺</span>
-              <span class="action-text">Doctor</span>
-            </button>
-          </div>
-        </section>
+        </div>
       </aside>
 
-      <!-- Center / Right Panel: Live Logs, Crashes, Diagnostics -->
-      <section class="center-panel">
-        <!-- Crash Alert Banner (hidden by default) -->
-        <div id="crashAlertBanner" class="crash-alert hidden">
-          <div class="crash-alert-header">
-            <span class="crash-icon">💥</span>
-            <div class="crash-title-group">
-              <span class="crash-type" id="crashType">Fatal Exception Detected</span>
-              <span class="crash-location" id="crashLocation">Top frame</span>
-            </div>
-            <div class="crash-actions">
-              <button id="btnDismissCrash" class="btn-sm">Dismiss</button>
-              <button id="btnCopyCrash" class="btn-sm btn-accent">Copy Report</button>
-            </div>
-          </div>
-          <div class="crash-preview" id="crashPreview">Stack trace details...</div>
+      <!-- Main Dynamic Multi-Pane Viewport -->
+      <main class="panes-viewport" id="panesViewport">
+        <!-- Dynamic Panes Grid (1 pane, 2 panes side-by-side, 3 panes grid) -->
+        <div class="panes-grid" id="panesGrid">
+          <!-- Populated dynamically by app.js -->
         </div>
 
-        <!-- Doctor Diagnostics Modal/Drawer -->
-        <div id="doctorModal" class="doctor-drawer hidden">
-          <div class="drawer-header">
-            <h3>🩺 Diagnostics & Health Check</h3>
-            <button id="btnCloseDoctor" class="btn-icon">✕</button>
-          </div>
-          <div id="doctorContent" class="doctor-content">
-            <p>Running environment diagnostics...</p>
-          </div>
-        </div>
-
-        <!-- Live Terminal Log Stream -->
-        <div class="terminal-card">
-          <div class="terminal-header">
-            <div class="filter-controls">
-              <button class="filter-btn active" data-level="ALL">All</button>
-              <button class="filter-btn filter-e" data-level="E">Errors</button>
-              <button class="filter-btn filter-w" data-level="W">Warnings</button>
-              <button class="filter-btn filter-i" data-level="I">Info</button>
-              <button class="filter-btn filter-d" data-level="D">Debug</button>
-            </div>
-            <div class="search-box">
-              <input type="text" id="logSearchInput" placeholder="Filter logs by tag or query...">
-            </div>
-            <div class="terminal-actions">
-              <label class="toggle-label">
-                <input type="checkbox" id="autoScrollCheck" checked>
-                <span>Auto-scroll</span>
-              </label>
-              <button id="btnClearLogs" class="btn-sm" title="Clear console">Clear</button>
-            </div>
-          </div>
-
-          <div id="logConsole" class="terminal-body">
-            <div class="log-line log-info">
-              <span class="log-time">[00:00:00]</span>
-              <span class="log-badge badge-i">INFO</span>
-              <span class="log-tag">[DevFlow]</span>
-              <span class="log-msg">DevFlow Companion initialized. Ready to connect.</span>
-            </div>
+        <!-- Empty Viewport Placeholder (when 0 panes open) -->
+        <div class="viewport-empty-state hidden" id="viewportEmptyState">
+          <div class="empty-icon">⚡</div>
+          <h2>No Open Panes</h2>
+          <p>Click any sub-project from the left sidebar to open its dedicated log terminal, or open the combined stream.</p>
+          <div class="empty-actions">
+            <button id="btnEmptyOpenAll" class="btn-primary">Open All Sub-Projects</button>
+            <button id="btnEmptyCombine" class="btn-secondary">Open Combined Stream</button>
           </div>
         </div>
-      </section>
-    </main>
+      </main>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- Modals & Drawers: Doctor & Crash Inspector                        -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- Doctor Diagnostics Modal -->
+    <div id="doctorModal" class="modal-overlay hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title">
+            <span class="icon">🩺</span>
+            <h3>DevFlow Doctor Diagnostics</h3>
+          </div>
+          <button id="btnCloseDoctor" class="btn-close">✕</button>
+        </div>
+        <div class="modal-body" id="doctorResults">
+          <p>Running environment diagnostics...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Crash Alert Banner -->
+    <div id="crashBanner" class="crash-alert-banner hidden">
+      <div class="crash-banner-content">
+        <span class="crash-icon">💥</span>
+        <div class="crash-info">
+          <span class="crash-title" id="crashTitle">Fatal Exception Detected</span>
+          <span class="crash-sub" id="crashSub">Top frame</span>
+        </div>
+        <div class="crash-actions">
+          <button id="btnCopyCrash" class="btn-xs btn-accent">Copy Report</button>
+          <button id="btnDismissCrash" class="btn-xs">Dismiss</button>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <script src="terminal-engine.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
