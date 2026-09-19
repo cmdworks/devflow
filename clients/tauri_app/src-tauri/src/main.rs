@@ -163,6 +163,7 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 .route("/api/target/restart", post(handle_restart_target))
                 .route("/api/workspace/reload-all", post(handle_reload_all))
                 .route("/api/workspace/restart-all", post(handle_restart_all))
+                .route("/api/dialog/pick-folder", post(handle_pick_folder))
                 .route("/api/events", get(handle_events_sse))
                 .route("/", get(index_handler))
                 .route("/{*path}", get(static_handler))
@@ -225,6 +226,9 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
     tauri::Builder::default()
         .setup(move |app| {
             use tauri::Manager;
+            if let Ok(menu) = tauri::menu::Menu::default(app.handle()) {
+                let _ = app.set_menu(menu);
+            }
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(parsed_url) = url_for_nav.parse() {
                     let _ = window.navigate(parsed_url);
@@ -286,6 +290,53 @@ struct WorkspacePathRequest {
     path: String,
 }
 
+fn resolve_workspace_path(input: &str) -> Option<PathBuf> {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return None;
+    }
+
+    // 1. Tilde expansion (~/Dev/...)
+    let expanded = if raw.starts_with("~/") || raw == "~" {
+        if let Some(home) = dirs::home_dir() {
+            if raw == "~" {
+                home
+            } else {
+                home.join(&raw[2..])
+            }
+        } else {
+            PathBuf::from(raw)
+        }
+    } else {
+        PathBuf::from(raw)
+    };
+
+    if expanded.exists() && expanded.is_dir() {
+        return Some(expanded.canonicalize().unwrap_or(expanded));
+    }
+
+    // 2. Relative to current working dir
+    if let Ok(cwd) = std::env::current_dir() {
+        let joined = cwd.join(raw);
+        if joined.exists() && joined.is_dir() {
+            return Some(joined.canonicalize().unwrap_or(joined));
+        }
+    }
+
+    // 3. Match against known projects by name or path (case-insensitive)
+    let known = GlobalRegistry::list_projects();
+    for p in known {
+        if p.name.eq_ignore_ascii_case(raw) || p.path.eq_ignore_ascii_case(raw) {
+            let pb = PathBuf::from(&p.path);
+            if pb.exists() && pb.is_dir() {
+                return Some(pb.canonicalize().unwrap_or(pb));
+            }
+        }
+    }
+
+    None
+}
+
 async fn handle_list_workspaces() -> Json<Vec<KnownProject>> {
     Json(GlobalRegistry::list_projects())
 }
@@ -293,11 +344,15 @@ async fn handle_list_workspaces() -> Json<Vec<KnownProject>> {
 async fn handle_add_workspace(
     Json(req): Json<WorkspacePathRequest>,
 ) -> Result<Json<WorkspaceResponse>, (StatusCode, String)> {
-    let p = PathBuf::from(&req.path);
-    if !p.exists() || !p.is_dir() {
-        return Err((StatusCode::BAD_REQUEST, format!("Directory does not exist: {}", req.path)));
-    }
-    let canonical = p.canonicalize().unwrap_or(p);
+    let canonical = match resolve_workspace_path(&req.path) {
+        Some(p) => p,
+        None => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Directory does not exist or cannot be resolved: {}", req.path),
+            ));
+        }
+    };
     let name = canonical
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -337,12 +392,16 @@ async fn handle_remove_workspace(
 async fn handle_workspace(
     Query(query): Query<WorkspaceQuery>,
 ) -> Json<WorkspaceResponse> {
-    let current_dir = query
+    let canonical = query
         .dir
-        .map(PathBuf::from)
-        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
-
-    let canonical = current_dir.canonicalize().unwrap_or(current_dir);
+        .as_deref()
+        .and_then(resolve_workspace_path)
+        .unwrap_or_else(|| {
+            std::env::current_dir()
+                .unwrap_or_else(|_| PathBuf::from("."))
+                .canonicalize()
+                .unwrap_or_else(|_| PathBuf::from("."))
+        });
 
     let workspace_name = canonical
         .file_name()
@@ -515,3 +574,25 @@ async fn handle_events_sse(
 
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
+
+async fn handle_pick_folder() -> Json<serde_json::Value> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = tokio::process::Command::new("osascript")
+            .arg("-e")
+            .arg("POSIX path of (choose folder with prompt \"Select DevFlow Workspace Directory\")")
+            .output()
+            .await;
+
+        if let Ok(out) = output {
+            if out.status.success() {
+                let path_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                if !path_str.is_empty() {
+                    return Json(serde_json::json!({ "success": true, "path": path_str }));
+                }
+            }
+        }
+    }
+    Json(serde_json::json!({ "success": false }))
+}
+

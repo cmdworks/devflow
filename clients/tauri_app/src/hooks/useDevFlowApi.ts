@@ -165,11 +165,22 @@ export function useDevFlowApi() {
     [apiBase]
   );
 
+  const pickFolder = useCallback(async (): Promise<{ success: boolean; path?: string }> => {
+    try {
+      const res = await fetch(`${apiBase}/api/dialog/pick-folder`, { method: "POST" });
+      if (!res.ok) return { success: false };
+      return await res.json();
+    } catch (_) {
+      return { success: false };
+    }
+  }, [apiBase]);
+
   return {
     fetchWorkspace,
     fetchWorkspaces,
     addWorkspace,
     removeWorkspace,
+    pickFolder,
     fetchDevices,
     bootEmulator,
     startTarget,

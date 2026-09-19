@@ -208,7 +208,10 @@ export const App: React.FC = () => {
           const initialPanes = [...targetPanes, combinedPane];
           setOpenPanes(initialPanes);
           setActivePaneId((prev) => {
-            if (prev && initialPanes.some((p) => p.id === prev)) return prev;
+            // If the previous tab was a target from the old workspace, focus the first new target
+            if (prev && prev !== "pane-combined" && initialPanes.some((p) => p.id === prev)) {
+              return prev;
+            }
             return initialPanes[0]?.id || "pane-combined";
           });
         }
@@ -230,6 +233,11 @@ export const App: React.FC = () => {
   const handleSwitchWorkspace = (newPath: string) => {
     setOpenPanes([]);
     setLogsByPaneId({});
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("dir", newPath);
+      window.history.pushState({}, "", url.toString());
+    } catch (_) {}
     loadWorkspace(newPath);
   };
 

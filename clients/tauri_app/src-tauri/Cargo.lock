@@ -885,6 +885,7 @@ dependencies = [
  "devflow_logs",
  "devflow_protocol",
  "devflow_tui",
+ "dirs",
  "futures-util",
  "mime_guess",
  "open",

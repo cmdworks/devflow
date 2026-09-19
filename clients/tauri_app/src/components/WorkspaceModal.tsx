@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   Folder,
   FolderPlus,
+  FolderOpen,
+  Clipboard,
   ArrowRight,
   Trash2,
   X,
@@ -9,6 +11,7 @@ import {
   Clock,
   Check,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { useDevFlowApi } from "../hooks/useDevFlowApi";
 import type { KnownWorkspace } from "../types";
@@ -29,19 +32,21 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   const api = useDevFlowApi();
   const [workspaces, setWorkspaces] = useState<KnownWorkspace[]>([]);
   const [newPathInput, setNewPathInput] = useState<string>("");
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [isListLoading, setIsListLoading] = useState<boolean>(false);
+  const [isOpening, setIsOpening] = useState<boolean>(false);
+  const [isPickingFolder, setIsPickingFolder] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const loadWorkspaces = useCallback(async () => {
     try {
-      setIsLoading(true);
+      setIsListLoading(true);
       const list = await api.fetchWorkspaces();
       setWorkspaces(list || []);
       setErrorMessage(null);
     } catch (err: any) {
       console.error("Failed to load known workspaces:", err);
     } finally {
-      setIsLoading(false);
+      setIsListLoading(false);
     }
   }, [api]);
 
@@ -64,7 +69,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     }
 
     try {
-      setIsLoading(true);
+      setIsOpening(true);
       setErrorMessage(null);
       await api.addWorkspace(trimmed);
       onSelectWorkspace(trimmed);
@@ -72,7 +77,45 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     } catch (err: any) {
       setErrorMessage(err?.message || "Failed to open directory. Verify path exists.");
     } finally {
-      setIsLoading(false);
+      setIsOpening(false);
+    }
+  };
+
+  const handleBrowseFolder = async () => {
+    try {
+      setIsPickingFolder(true);
+      setErrorMessage(null);
+      const res = await api.pickFolder();
+      if (res.success && res.path) {
+        setNewPathInput(res.path);
+        // Automatically attempt to add and open
+        try {
+          setIsOpening(true);
+          await api.addWorkspace(res.path);
+          onSelectWorkspace(res.path);
+          onClose();
+        } catch (err: any) {
+          setErrorMessage(err?.message || "Failed to open directory.");
+        } finally {
+          setIsOpening(false);
+        }
+      }
+    } catch (err: any) {
+      console.error("Browse folder error:", err);
+    } finally {
+      setIsPickingFolder(false);
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setNewPathInput(text.trim());
+        setErrorMessage(null);
+      }
+    } catch (err) {
+      console.warn("Direct clipboard read unavailable:", err);
     }
   };
 
@@ -168,9 +211,15 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
 
           {/* Add / Open New Workspace Form */}
           <form onSubmit={handleAddAndOpen} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-              Add or Open Workspace Directory
-            </label>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                Add or Open Workspace Directory
+              </label>
+              <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+                Accepts full paths, ~ tilde, or project names
+              </span>
+            </div>
+
             <div style={{ display: "flex", gap: "8px" }}>
               <div style={{ position: "relative", flex: 1 }}>
                 <input
@@ -180,6 +229,22 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   onChange={(e) => {
                     setNewPathInput(e.target.value);
                     if (errorMessage) setErrorMessage(null);
+                  }}
+                  onKeyDown={async (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text) {
+                          e.preventDefault();
+                          const target = e.currentTarget;
+                          const start = target.selectionStart || 0;
+                          const end = target.selectionEnd || 0;
+                          const val = newPathInput;
+                          const next = val.slice(0, start) + text.trim() + val.slice(end);
+                          setNewPathInput(next);
+                        }
+                      } catch (_) {}
+                    }
                   }}
                   style={{
                     width: "100%",
@@ -196,9 +261,60 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   autoFocus
                 />
               </div>
+
+              {/* Paste Button */}
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                title="Paste directory path from clipboard"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "0 12px",
+                  background: "rgba(30, 41, 59, 0.8)",
+                  color: "var(--text-secondary)",
+                  border: "1px solid var(--border-color)",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                <Clipboard size={14} />
+                <span>Paste</span>
+              </button>
+
+              {/* Browse Button */}
+              <button
+                type="button"
+                disabled={isPickingFolder}
+                onClick={handleBrowseFolder}
+                title="Browse folder with macOS native dialog"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  padding: "0 12px",
+                  background: "rgba(6, 182, 212, 0.12)",
+                  color: "#06b6d4",
+                  border: "1px solid rgba(6, 182, 212, 0.35)",
+                  borderRadius: "6px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: isPickingFolder ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {isPickingFolder ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
+                <span>Browse...</span>
+              </button>
+
+              {/* Open Submit Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isOpening}
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -210,13 +326,15 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   borderRadius: "6px",
                   fontSize: "13px",
                   fontWeight: 600,
-                  cursor: isLoading ? "wait" : "pointer",
+                  cursor: isOpening ? "wait" : "pointer",
+                  whiteSpace: "nowrap",
                 }}
               >
-                <FolderPlus size={15} />
+                {isOpening ? <Loader2 size={14} className="animate-spin" /> : <FolderPlus size={15} />}
                 <span>Open</span>
               </button>
             </div>
+
             {errorMessage && (
               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444", fontSize: "12px" }}>
                 <AlertCircle size={13} />
@@ -238,6 +356,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
                 Recent & Known Workspaces ({workspaces.length})
               </span>
+              {isListLoading && (
+                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Refreshing...</span>
+              )}
             </div>
 
             <div
@@ -264,7 +385,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 </div>
               ) : (
                 workspaces.map((ws) => {
-                  const isCurrent = ws.path === currentPath;
+                  const isCurrent = ws.path === currentPath || ws.name === currentPath;
                   return (
                     <div
                       key={ws.path}
@@ -279,7 +400,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                         padding: "10px 14px",
                         background: isCurrent ? "rgba(6, 182, 212, 0.12)" : "rgba(30, 41, 59, 0.5)",
                         border: isCurrent
-                          ? "1px solid rgba(6, 182, 212, 0.4)"
+                          ? "1px solid rgba(6, 182, 212, 0.45)"
                           : "1px solid var(--border-color)",
                         borderRadius: "6px",
                         cursor: "pointer",
@@ -321,7 +442,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
-                              maxWidth: "420px",
+                              maxWidth: "380px",
                             }}
                             title={ws.path}
                           >
@@ -330,7 +451,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                         </div>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         {ws.last_opened && (
                           <div
                             style={{
@@ -339,12 +460,66 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                               gap: "4px",
                               fontSize: "11px",
                               color: "var(--text-muted)",
+                              marginRight: "4px",
                             }}
                           >
                             <Clock size={11} />
                             <span>{formatTime(ws.last_opened)}</span>
                           </div>
                         )}
+
+                        {isCurrent ? (
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "4px 10px",
+                              background: "rgba(16, 185, 129, 0.15)",
+                              border: "1px solid rgba(16, 185, 129, 0.4)",
+                              borderRadius: "4px",
+                              color: "#10b981",
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            <Check size={12} /> Active
+                          </span>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSelectWorkspace(ws.path);
+                              onClose();
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                              padding: "4px 10px",
+                              background: "rgba(6, 182, 212, 0.15)",
+                              border: "1px solid rgba(6, 182, 212, 0.4)",
+                              borderRadius: "4px",
+                              color: "#06b6d4",
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              transition: "all 0.15s ease",
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#0891b2";
+                              e.currentTarget.style.color = "#fff";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "rgba(6, 182, 212, 0.15)";
+                              e.currentTarget.style.color = "#06b6d4";
+                            }}
+                          >
+                            <span>Open</span>
+                            <ArrowRight size={12} />
+                          </button>
+                        )}
+
                         <button
                           onClick={(e) => handleRemove(e, ws.path)}
                           title="Remove from recent list"
@@ -361,7 +536,6 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                         >
                           <Trash2 size={13} />
                         </button>
-                        <ArrowRight size={14} color="var(--text-muted)" />
                       </div>
                     </div>
                   );
