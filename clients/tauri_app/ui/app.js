@@ -34,6 +34,7 @@ class DevFlowApp {
     this.btnGlobalRestartAll = document.getElementById('btnGlobalRestartAll');
     this.btnGlobalStopAll = document.getElementById('btnGlobalStopAll');
     this.btnTopDoctor = document.getElementById('btnTopDoctor');
+    this.btnInstallCli = document.getElementById('btnInstallCli');
 
     // Sidebar elements
     this.targetCountBadge = document.getElementById('targetCountBadge');
@@ -85,6 +86,9 @@ class DevFlowApp {
     this.btnGlobalRestartAll.addEventListener('click', () => this.restartAll());
     this.btnGlobalStopAll.addEventListener('click', () => this.stopAll());
     this.btnTopDoctor.addEventListener('click', () => this.runDoctor());
+    if (this.btnInstallCli) {
+      this.btnInstallCli.addEventListener('click', () => this.installCliInPath());
+    }
 
     // Sidebar combine all
     this.btnCombineAll.addEventListener('click', () => this.openCombinedPane());
@@ -721,6 +725,20 @@ class DevFlowApp {
       this.doctorResults.innerHTML = html;
     } catch (e) {
       this.doctorResults.innerHTML = `<p style="color:#ef4444">Failed to run doctor: ${e.message}</p>`;
+    }
+  }
+
+  async installCliInPath() {
+    try {
+      const res = await fetch(`${this.apiBase}/api/shell/install`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        alert(`✓ ${data.message}\n\nYou can now run 'devflow' directly from VS Code or any terminal!`);
+      } else {
+        alert(`Failed to install CLI command: ${data.error}`);
+      }
+    } catch (e) {
+      alert(`Installation request error: ${e.message}`);
     }
   }
 

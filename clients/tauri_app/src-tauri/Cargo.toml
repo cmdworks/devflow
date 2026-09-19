@@ -1,12 +1,14 @@
 [package]
 name = "devflow-desktop"
 version = "0.1.0"
-description = "DevFlow Desktop Companion App"
+description = "DevFlow Desktop Companion App with Integrated CLI & Shell Binding"
 edition = "2021"
 
 [workspace]
 
 [dependencies]
+devflow_cli_core = { path = "../../../crates/devflow_cli_core" }
+devflow_tui = { path = "../../../crates/devflow_tui" }
 devflow_core = { path = "../../../crates/devflow_core" }
 devflow_protocol = { path = "../../../crates/devflow_protocol" }
 devflow_devices = { path = "../../../crates/devflow_devices" }
@@ -22,3 +24,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 async-stream = "0.3"
 futures-util = "0.3"
+open = "5.3"
+colored = "3.0"

@@ -8,6 +8,8 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use colored::*;
+use devflow_cli_core::{run_cli_args, shell, CliAction};
 use devflow_core::doctor::DoctorEngine;
 use devflow_core::event::EventBus;
 use devflow_core::project::{Project, ProjectTarget};
@@ -15,6 +17,7 @@ use devflow_core::registry::GlobalRegistry;
 use devflow_devices::DeviceManager;
 use devflow_frameworks::session::SessionManager;
 use devflow_protocol::{Device, DoctorReport};
+use devflow_tui::TuiRunner;
 use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -66,12 +69,39 @@ struct BootEmulatorRequest {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
+    let raw_args: Vec<String> = std::env::args().collect();
+
+    // If CLI arguments were provided beyond binary name, evaluate via shared CLI engine
+    if raw_args.len() > 1 {
+        let action = run_cli_args(raw_args).await?;
+        match action {
+            CliAction::Executed => return Ok(()),
+            CliAction::LaunchTui { dir } => {
+                return TuiRunner::run_hub(dir).await.map_err(|e| anyhow::anyhow!("{}", e));
+            }
+            CliAction::LaunchGui { dir, port, open_browser } => {
+                return run_gui_server(dir, port, open_browser).await;
+            }
+        }
+    }
+
+    // Default: launched without args (e.g. double clicked or 'devflow-desktop') -> launch Desktop GUI
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(9090);
+
+    run_gui_server(current_dir, port, true).await
+}
+
+async fn run_gui_server(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
+    let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info".into()),
         )
-        .init();
+        .try_init();
 
     let event_bus = EventBus::new(2000);
     let state = AppState {
@@ -94,6 +124,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/devices", get(handle_devices))
         .route("/api/devices/boot", post(handle_boot_emulator))
         .route("/api/doctor", get(handle_doctor))
+        .route("/api/shell/install", post(handle_shell_install))
+        .route("/api/shell/uninstall", post(handle_shell_uninstall))
         .route("/api/target/start", post(handle_start_target))
         .route("/api/target/stop", post(handle_stop_target))
         .route("/api/target/reload", post(handle_reload_target))
@@ -104,19 +136,26 @@ async fn main() -> anyhow::Result<()> {
         .layer(cors)
         .with_state(state);
 
-    let port = std::env::var("PORT")
-        .ok()
-        .and_then(|p| p.parse().ok())
-        .unwrap_or(9090);
-
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    info!("⚡ DevFlow Desktop GUI Server running at http://localhost:{}", port);
-    println!("⚡ DevFlow Desktop GUI Server running at http://localhost:{}", port);
+    let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&workspace_dir.display().to_string()));
+    
+    info!("⚡ DevFlow Desktop GUI Server running at {}", url);
+    println!("\n{}", "═══ DevFlow Desktop Companion App ═══".cyan().bold());
+    println!("⚡ GUI Server running at: {}", url.underline());
+    println!("Workspace: {}", workspace_dir.display().to_string().dimmed());
+
+    if open_browser {
+        let _ = open::that(&url);
+    }
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn urlencoding_simple(s: &str) -> String {
+    s.replace(' ', "%20").replace('/', "%2F")
 }
 
 async fn handle_index() -> impl IntoResponse {
@@ -185,6 +224,20 @@ async fn handle_doctor(
     let dir = query.dir.map(PathBuf::from).unwrap_or_else(|| PathBuf::from("."));
     let report = DoctorEngine::run_diagnostics(&dir).await;
     Json(report)
+}
+
+async fn handle_shell_install() -> Json<serde_json::Value> {
+    match shell::install_cli_symlink(None) {
+        Ok(msg) => Json(serde_json::json!({ "success": true, "message": msg })),
+        Err(e) => Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
+}
+
+async fn handle_shell_uninstall() -> Json<serde_json::Value> {
+    match shell::uninstall_cli_symlink() {
+        Ok(msg) => Json(serde_json::json!({ "success": true, "message": msg })),
+        Err(e) => Json(serde_json::json!({ "success": false, "error": e.to_string() })),
+    }
 }
 
 async fn handle_start_target(

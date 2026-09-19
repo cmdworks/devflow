@@ -1,0 +1,30 @@
+[package]
+name = "devflow_cli_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Core CLI command parsing, execution, and shell integration for DevFlow"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+devflow_devices = { workspace = true }
+devflow_logs = { workspace = true }
+devflow_watcher = { workspace = true }
+devflow_platforms = { workspace = true }
+devflow_frameworks = { workspace = true }
+devflow_mcp = { workspace = true }
+devflow_tui = { workspace = true }
+
+clap = { workspace = true }
+clap_complete = { workspace = true }
+open = { workspace = true }
+colored = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

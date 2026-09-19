@@ -10,6 +10,7 @@ members = [
     "crates/devflow_frameworks",
     "crates/devflow_mcp",
     "crates/devflow_tui",
+    "crates/devflow_cli_core",
     "crates/devflow_cli",
 ]
 exclude = [
@@ -22,7 +23,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["DevFlow Contributors"]
 license = "MIT"
-repository = "https://github.com/yourorg/devflow"
+repository = "https://github.com/cmdworks/devflow"
 description = "Universal, framework-aware development runner and MCP server"
 
 [workspace.dependencies]
@@ -35,12 +36,15 @@ devflow_platforms = { path = "crates/devflow_platforms" }
 devflow_frameworks = { path = "crates/devflow_frameworks" }
 devflow_mcp = { path = "crates/devflow_mcp" }
 devflow_tui = { path = "crates/devflow_tui" }
+devflow_cli_core = { path = "crates/devflow_cli_core" }
 
 tokio = { version = "1.43", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
 clap = { version = "4.5", features = ["derive", "env"] }
+clap_complete = "4.5"
+open = "5.3"
 ratatui = "0.29"
 crossterm = { version = "0.28", features = ["event-stream"] }
 notify = "8.0"
