@@ -1,9 +1,10 @@
 use colored::*;
-use devflow_cli_core::{run_cli_args, CliAction};
+use devflow_cli_core::{init_environment, run_cli_args, CliAction};
 use devflow_tui::TuiRunner;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    init_environment();
     let args: Vec<String> = std::env::args().collect();
     let action = run_cli_args(args).await?;
 

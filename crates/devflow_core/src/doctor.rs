@@ -6,6 +6,7 @@ pub struct DoctorEngine;
 
 impl DoctorEngine {
     pub async fn run_diagnostics(project_path: impl AsRef<Path>) -> DoctorReport {
+        crate::env::init_environment();
         let path = project_path.as_ref();
         let mut checks = Vec::new();
 
@@ -13,27 +14,22 @@ impl DoctorEngine {
         checks.push(Self::check_tool("cargo", &["--version"], "Cargo (Rust toolchain)", true));
 
         // 2. Android Debug Bridge (ADB)
-        let adb_bin = if std::process::Command::new("adb").arg("version").output().is_ok() {
-            "adb".to_string()
-        } else if let Ok(home) = std::env::var("HOME") {
-            let p = std::path::Path::new(&home).join("Library/Android/sdk/platform-tools/adb");
-            if p.exists() {
-                p.to_string_lossy().to_string()
-            } else {
-                "adb".to_string()
-            }
-        } else {
-            "adb".to_string()
-        };
-
         checks.push(Self::check_tool(
-            &adb_bin,
+            "adb",
             &["version"],
             "Android Debug Bridge (adb)",
             false,
         ));
 
-        // 3. Apple Tooling (xcrun / simctl)
+        // 3. Java Runtime & Compiler
+        checks.push(Self::check_tool(
+            "javac",
+            &["-version"],
+            "Java Development Kit (JDK)",
+            false,
+        ));
+
+        // 4. Apple Tooling (xcrun / simctl)
         checks.push(Self::check_tool(
             "xcrun",
             &["simctl", "help"],
@@ -41,7 +37,7 @@ impl DoctorEngine {
             false,
         ));
 
-        // 4. Swift Compiler
+        // 5. Swift Compiler
         checks.push(Self::check_tool(
             "swift",
             &["--version"],
@@ -49,7 +45,7 @@ impl DoctorEngine {
             false,
         ));
 
-        // 5. Gradle
+        // 6. Gradle
         checks.push(Self::check_tool(
             "gradle",
             &["--version"],
@@ -57,7 +53,7 @@ impl DoctorEngine {
             false,
         ));
 
-        // 6. Node.js
+        // 7. Node.js
         checks.push(Self::check_tool(
             "node",
             &["--version"],
@@ -65,7 +61,15 @@ impl DoctorEngine {
             false,
         ));
 
-        // 7. Flutter
+        // 8. Bun
+        checks.push(Self::check_tool(
+            "bun",
+            &["--version"],
+            "Bun Runtime",
+            false,
+        ));
+
+        // 9. Flutter
         checks.push(Self::check_tool(
             "flutter",
             &["--version"],

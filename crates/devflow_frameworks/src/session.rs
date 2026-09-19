@@ -25,7 +25,8 @@ pub struct SessionManager {
 }
 
 impl SessionManager {
-    pub async fn create(
+    pub async fn create_with_id(
+        session_id: String,
         project_dir: impl AsRef<Path>,
         target_device_id: Option<&str>,
         framework_override: Option<&str>,
@@ -46,7 +47,6 @@ impl SessionManager {
             .await
             .unwrap_or_else(Device::host_desktop);
 
-        let session_id = uuid::Uuid::new_v4().to_string();
         let state = SessionState {
             session_id: session_id.clone(),
             project_name: project.name.clone(),
@@ -73,6 +73,16 @@ impl SessionManager {
             log_buffer: LogBuffer::default(),
             event_bus,
         })
+    }
+
+    pub async fn create(
+        project_dir: impl AsRef<Path>,
+        target_device_id: Option<&str>,
+        framework_override: Option<&str>,
+        event_bus: EventBus,
+    ) -> Result<Self> {
+        let session_id = uuid::Uuid::new_v4().to_string();
+        Self::create_with_id(session_id, project_dir, target_device_id, framework_override, event_bus).await
     }
 
     pub fn set_status(&self, status: SessionStatus) {
@@ -143,22 +153,78 @@ impl SessionManager {
             is_release: false,
         };
 
+        let session_id = self.get_state().session_id;
+
         self.event_bus.publish(DevflowEvent::BuildStarted {
-            session_id: self.get_state().session_id,
+            session_id: session_id.clone(),
             project_name: self.project.name.clone(),
         });
 
+        let start_msg = format!("⚡ Starting build for '{}' [{}] on device '{}'...", self.project.name, self.adapter.name(), self.device.name);
+        let mut start_entry = LogEntry::new(devflow_protocol::LogLevel::I, start_msg);
+        start_entry.tag = Some("build".to_string());
+        self.log_buffer.push(start_entry.clone());
+        self.event_bus.publish(DevflowEvent::LogAppended {
+            session_id: session_id.clone(),
+            entry: start_entry,
+        });
+
         let build_res = self.adapter.build(&build_ctx).await?;
+
+        // Stream compiler stdout lines to log buffer and UI
+        for line in build_res.stdout.lines() {
+            if !line.trim().is_empty() {
+                let mut entry = LogEntry::new(devflow_protocol::LogLevel::I, line);
+                entry.tag = Some("compiler".to_string());
+                self.log_buffer.push(entry.clone());
+                self.event_bus.publish(DevflowEvent::LogAppended {
+                    session_id: session_id.clone(),
+                    entry,
+                });
+            }
+        }
+
+        // Stream compiler stderr lines
+        for line in build_res.stderr.lines() {
+            if !line.trim().is_empty() {
+                let lvl = if build_res.success { devflow_protocol::LogLevel::W } else { devflow_protocol::LogLevel::E };
+                let mut entry = LogEntry::new(lvl, line);
+                entry.tag = Some("compiler".to_string());
+                self.log_buffer.push(entry.clone());
+                self.event_bus.publish(DevflowEvent::LogAppended {
+                    session_id: session_id.clone(),
+                    entry,
+                });
+            }
+        }
+
         self.event_bus.publish(DevflowEvent::BuildCompleted {
-            session_id: self.get_state().session_id,
+            session_id: session_id.clone(),
             result: build_res.clone(),
         });
 
         if !build_res.success {
             self.set_status(SessionStatus::Failed);
-            self.set_last_error(build_res.error_message);
+            self.set_last_error(build_res.error_message.clone());
+            let fail_msg = format!("✗ Build failed in {}ms: {}", build_res.duration_ms, build_res.error_message.unwrap_or_else(|| "Unknown compiler error".to_string()));
+            let mut fail_entry = LogEntry::new(devflow_protocol::LogLevel::E, fail_msg);
+            fail_entry.tag = Some("build".to_string());
+            self.log_buffer.push(fail_entry.clone());
+            self.event_bus.publish(DevflowEvent::LogAppended {
+                session_id: session_id.clone(),
+                entry: fail_entry,
+            });
             return Err(DevflowError::Build("Build failed".to_string()));
         }
+
+        let ok_msg = format!("✓ Build succeeded in {}ms", build_res.duration_ms);
+        let mut ok_entry = LogEntry::new(devflow_protocol::LogLevel::I, ok_msg);
+        ok_entry.tag = Some("build".to_string());
+        self.log_buffer.push(ok_entry.clone());
+        self.event_bus.publish(DevflowEvent::LogAppended {
+            session_id: session_id.clone(),
+            entry: ok_entry,
+        });
 
         {
             let mut state = self.state.write().unwrap();

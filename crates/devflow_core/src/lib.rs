@@ -1,5 +1,6 @@
 pub mod config;
 pub mod doctor;
+pub mod env;
 pub mod error;
 pub mod event;
 pub mod ipc;
@@ -8,6 +9,7 @@ pub mod registry;
 
 pub use config::DevflowConfig;
 pub use doctor::DoctorEngine;
+pub use env::init_environment;
 pub use error::{DevflowError, Result};
 pub use event::{DevflowEvent, EventBus};
 pub use ipc::{IpcClient, IpcRequest, IpcResponse, IpcServer};

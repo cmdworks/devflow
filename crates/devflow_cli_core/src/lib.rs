@@ -19,6 +19,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
+pub use devflow_core::init_environment;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum CliAction {
     Executed,
@@ -245,6 +247,7 @@ where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
+    init_environment();
     let cli = Cli::parse_from(args);
 
     if let Some(ref dir) = cli.dir {

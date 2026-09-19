@@ -140,14 +140,36 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
         let gradlew = Self::find_gradlew(&ctx.project_dir);
         let task = if ctx.is_release { "assembleRelease" } else { "assembleDebug" };
 
+        #[cfg(unix)]
+        {
+            let gradlew_file = ctx.project_dir.join("gradlew");
+            if gradlew_file.exists() {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(metadata) = std::fs::metadata(&gradlew_file) {
+                    let mut perms = metadata.permissions();
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&gradlew_file, perms);
+                }
+            }
+        }
+
         info!("Running '{} {}' in {}", gradlew, task, ctx.project_dir.display());
 
-        let output = Command::new(&gradlew)
-            .arg(task)
-            .current_dir(&ctx.project_dir)
+        let mut cmd = Command::new(&gradlew);
+        cmd.arg(task).current_dir(&ctx.project_dir);
+
+        if let Ok(java_home) = std::env::var("JAVA_HOME") {
+            cmd.env("JAVA_HOME", java_home);
+        }
+        if let Ok(android_home) = std::env::var("ANDROID_HOME") {
+            cmd.env("ANDROID_HOME", &android_home);
+            cmd.env("ANDROID_SDK_ROOT", &android_home);
+        }
+
+        let output = cmd
             .output()
             .await
-            .map_err(|e| DevflowError::Build(format!("Failed to run Gradle build: {}", e)))?;
+            .map_err(|e| DevflowError::Build(format!("Failed to run Gradle build ({}): {}", gradlew, e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();

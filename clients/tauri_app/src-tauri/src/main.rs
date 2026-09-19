@@ -68,6 +68,7 @@ struct BootEmulatorRequest {
 }
 
 fn main() {
+    devflow_core::init_environment();
     let raw_args: Vec<String> = std::env::args().collect();
 
     // If CLI arguments were provided beyond binary name, evaluate via shared CLI engine
@@ -292,7 +293,7 @@ async fn handle_start_target(
     let target_id = req.target_id.clone();
     let event_bus = state.event_bus.clone();
 
-    match SessionManager::create(&path, req.device_id.as_deref(), Some(&req.framework), event_bus).await {
+    match SessionManager::create_with_id(target_id.clone(), &path, req.device_id.as_deref(), Some(&req.framework), event_bus).await {
         Ok(sess) => {
             let sess_arc = Arc::new(sess);
             let sess_clone = sess_arc.clone();
