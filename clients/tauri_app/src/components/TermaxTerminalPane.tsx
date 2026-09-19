@@ -1,15 +1,21 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Play, Square, Zap, RotateCw, Trash2, X } from "lucide-react";
 import { Terminal } from "@termaxjs/web/canvas";
 import { FitAddon } from "@termaxjs/web/addons";
+import { TermaxPaneHeader } from "./TermaxPaneHeader";
 import type { LogEntry, PaneInfo } from "../types";
 
 interface TermaxTerminalPaneProps {
   pane: PaneInfo;
   logs: LogEntry[];
+  isActive: boolean;
+  isMaximized: boolean;
+  onFocusPane?: (paneId: string) => void;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
   onRestart: (targetId: string) => void;
+  onSplitRight: (paneId: string) => void;
+  onSplitDown: (paneId: string) => void;
+  onToggleMaximize: (paneId: string) => void;
   onClearLogs: (paneId: string) => void;
   onClose: (paneId: string) => void;
 }
@@ -17,9 +23,15 @@ interface TermaxTerminalPaneProps {
 export const TermaxTerminalPane: React.FC<TermaxTerminalPaneProps> = ({
   pane,
   logs,
+  isActive,
+  isMaximized,
+  onFocusPane,
   onToggleRun,
   onReload,
   onRestart,
+  onSplitRight,
+  onSplitDown,
+  onToggleMaximize,
   onClearLogs,
   onClose,
 }) => {
@@ -143,90 +155,37 @@ export const TermaxTerminalPane: React.FC<TermaxTerminalPaneProps> = ({
     term.scrollToBottom();
   }, [logs, levelFilter, searchQuery, formatLogToAnsi]);
 
-  const isRunning = pane.status === "running" || pane.status === "building";
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        fitAddonRef.current?.fit();
+      } catch (_) {}
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isMaximized]);
 
   return (
-    <div className={`terminal-pane ${isRunning ? "focus" : ""}`}>
-      <div className="pane-header">
-        <div className="pane-header-left">
-          <span className="pane-title">{pane.title}</span>
-          <span className={`pane-status-pill ${pane.status}`}>{pane.status}</span>
-        </div>
-
-        <div className="pane-header-right">
-          {/* Level Filter Chips */}
-          <div className="pane-filter-group">
-            {["ALL", "E", "W", "I", "D"].map((lvl) => (
-              <button
-                key={lvl}
-                className={`filter-btn ${levelFilter === lvl ? "active" : ""}`}
-                onClick={() => setLevelFilter(lvl)}
-              >
-                {lvl === "E" ? "ERR" : lvl === "W" ? "WRN" : lvl === "I" ? "INF" : lvl === "D" ? "DBG" : "ALL"}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Input */}
-          <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-            <input
-              type="text"
-              className="pane-search-input"
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-
-          {/* Target Action Controls (for non-combined panes) */}
-          {!pane.isCombined && (
-            <>
-              <button
-                className={`btn-pane-action ${isRunning ? "stop-btn" : "run-btn"}`}
-                onClick={() => onToggleRun(pane.targetId)}
-                title={isRunning ? "Stop Target" : "Run Target"}
-              >
-                {isRunning ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-                <span>{isRunning ? "Stop" : "Run"}</span>
-              </button>
-
-              <button
-                className="btn-pane-action"
-                onClick={() => onReload(pane.targetId)}
-                title="Hot Reload Target"
-              >
-                <Zap size={11} color="#f59e0b" />
-              </button>
-
-              <button
-                className="btn-pane-action"
-                onClick={() => onRestart(pane.targetId)}
-                title="Restart Target App"
-              >
-                <RotateCw size={11} color="#06b6d4" />
-              </button>
-            </>
-          )}
-
-          {/* Clear Console */}
-          <button
-            className="btn-pane-action"
-            onClick={() => onClearLogs(pane.id)}
-            title="Clear Console"
-          >
-            <Trash2 size={11} />
-          </button>
-
-          {/* Close Pane */}
-          <button
-            className="btn-pane-close"
-            onClick={() => onClose(pane.id)}
-            title="Close Pane"
-          >
-            <X size={13} />
-          </button>
-        </div>
-      </div>
+    <div
+      className={`terminal-pane ${isActive ? "active-pane" : ""} ${isMaximized ? "maximized" : ""}`}
+      onClick={() => onFocusPane?.(pane.id)}
+    >
+      <TermaxPaneHeader
+        pane={pane}
+        isActive={isActive}
+        isMaximized={isMaximized}
+        levelFilter={levelFilter}
+        searchQuery={searchQuery}
+        onSelectLevel={setLevelFilter}
+        onChangeSearch={setSearchQuery}
+        onToggleRun={onToggleRun}
+        onReload={onReload}
+        onRestart={onRestart}
+        onSplitRight={onSplitRight}
+        onSplitDown={onSplitDown}
+        onToggleMaximize={onToggleMaximize}
+        onClearLogs={onClearLogs}
+        onClose={onClose}
+      />
 
       <div ref={containerRef} className="pane-terminal-container" />
     </div>

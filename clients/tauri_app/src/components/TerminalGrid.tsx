@@ -1,14 +1,22 @@
 import React from "react";
 import { FolderPlus, Radio } from "lucide-react";
 import { TermaxTerminalPane } from "./TermaxTerminalPane";
+import type { LayoutMode } from "./WorkspaceTabBar";
 import type { PaneInfo, LogEntry } from "../types";
 
 interface TerminalGridProps {
   panes: PaneInfo[];
+  activePaneId: string;
+  maximizedPaneId: string | null;
+  layoutMode: LayoutMode;
   logsByPaneId: Record<string, LogEntry[]>;
+  onFocusPane: (paneId: string) => void;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
   onRestart: (targetId: string) => void;
+  onSplitRight: (paneId: string) => void;
+  onSplitDown: (paneId: string) => void;
+  onToggleMaximize: (paneId: string) => void;
   onClearLogs: (paneId: string) => void;
   onClosePane: (paneId: string) => void;
   onOpenAllPanes: () => void;
@@ -17,10 +25,17 @@ interface TerminalGridProps {
 
 export const TerminalGrid: React.FC<TerminalGridProps> = ({
   panes,
+  activePaneId,
+  maximizedPaneId,
+  layoutMode,
   logsByPaneId,
+  onFocusPane,
   onToggleRun,
   onReload,
   onRestart,
+  onSplitRight,
+  onSplitDown,
+  onToggleMaximize,
   onClearLogs,
   onClosePane,
   onOpenAllPanes,
@@ -30,8 +45,8 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
     return (
       <div className="empty-viewport">
         <div className="empty-viewport-title">No Active Terminal Panes</div>
-        <div style={{ fontSize: "13px" }}>
-          Select a project target from the sidebar or open all workspace targets to start streaming logs.
+        <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+          Select a project target from the sidebar or open a workspace tab to start streaming logs.
         </div>
         <div className="empty-viewport-actions">
           <button className="btn-top-action primary" onClick={onOpenAllPanes}>
@@ -47,27 +62,84 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
     );
   }
 
-  const gridClass =
-    panes.length === 1
-      ? "panes-1"
-      : panes.length === 2
-      ? "panes-2"
-      : panes.length === 3
-      ? "panes-3"
-      : panes.length === 4
-      ? "panes-4"
-      : "panes-many";
+  // 1. Maximized Solo Mode: Expand single pane to 100% viewport
+  if (maximizedPaneId) {
+    const maxPane = panes.find((p) => p.id === maximizedPaneId);
+    if (maxPane) {
+      return (
+        <div className="viewport-layout layout-maximized">
+          <TermaxTerminalPane
+            key={maxPane.id}
+            pane={maxPane}
+            logs={logsByPaneId[maxPane.id] || []}
+            isActive={true}
+            isMaximized={true}
+            onFocusPane={onFocusPane}
+            onToggleRun={onToggleRun}
+            onReload={onReload}
+            onRestart={onRestart}
+            onSplitRight={onSplitRight}
+            onSplitDown={onSplitDown}
+            onToggleMaximize={onToggleMaximize}
+            onClearLogs={onClearLogs}
+            onClose={onClosePane}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 2. Tabs Mode (Default): Only render the active tab pane at 100% viewport
+  if (layoutMode === "tabs") {
+    const currentPane = panes.find((p) => p.id === activePaneId) || panes[0];
+    if (currentPane) {
+      return (
+        <div className="viewport-layout layout-tabs">
+          <TermaxTerminalPane
+            key={currentPane.id}
+            pane={currentPane}
+            logs={logsByPaneId[currentPane.id] || []}
+            isActive={true}
+            isMaximized={false}
+            onFocusPane={onFocusPane}
+            onToggleRun={onToggleRun}
+            onReload={onReload}
+            onRestart={onRestart}
+            onSplitRight={onSplitRight}
+            onSplitDown={onSplitDown}
+            onToggleMaximize={onToggleMaximize}
+            onClearLogs={onClearLogs}
+            onClose={onClosePane}
+          />
+        </div>
+      );
+    }
+  }
+
+  // 3. Multi-Pane Layout Modes: Split-H, Split-V, or Grid
+  const layoutClass =
+    layoutMode === "split-h"
+      ? "layout-split-h"
+      : layoutMode === "split-v"
+      ? "layout-split-v"
+      : "layout-grid";
 
   return (
-    <div className={`panes-grid ${gridClass}`}>
+    <div className={`viewport-layout ${layoutClass}`}>
       {panes.map((pane) => (
         <TermaxTerminalPane
           key={pane.id}
           pane={pane}
           logs={logsByPaneId[pane.id] || []}
+          isActive={pane.id === activePaneId}
+          isMaximized={false}
+          onFocusPane={onFocusPane}
           onToggleRun={onToggleRun}
           onReload={onReload}
           onRestart={onRestart}
+          onSplitRight={onSplitRight}
+          onSplitDown={onSplitDown}
+          onToggleMaximize={onToggleMaximize}
           onClearLogs={onClearLogs}
           onClose={onClosePane}
         />

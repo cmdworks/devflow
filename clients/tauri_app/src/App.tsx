@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TerminalGrid } from "./components/TerminalGrid";
 import { DoctorModal } from "./components/DoctorModal";
 import { WorkspaceModal } from "./components/WorkspaceModal";
+import { WorkspaceTabBar, type LayoutMode } from "./components/WorkspaceTabBar";
 import { useDevFlowApi } from "./hooks/useDevFlowApi";
 import { useDevFlowEvents } from "./hooks/useDevFlowEvents";
 import type {
@@ -27,6 +28,16 @@ export const App: React.FC = () => {
 
   const [openPanes, setOpenPanes] = useState<PaneInfo[]>([]);
   const [logsByPaneId, setLogsByPaneId] = useState<Record<string, LogEntry[]>>({});
+
+  const [layoutMode, setLayoutMode] = useState<LayoutMode>(() => {
+    return (localStorage.getItem("devflow_layout_mode") as LayoutMode) || "tabs";
+  });
+  const [activePaneId, setActivePaneId] = useState<string>("");
+  const [maximizedPaneId, setMaximizedPaneId] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("devflow_layout_mode", layoutMode);
+  }, [layoutMode]);
 
   const [isDoctorOpen, setIsDoctorOpen] = useState<boolean>(false);
   const [doctorReport, setDoctorReport] = useState<DoctorReport | null>(null);
@@ -120,12 +131,13 @@ export const App: React.FC = () => {
 
   // Open pane for a target
   const openTargetPane = useCallback((target: ProjectTarget) => {
+    const paneId = `pane-${target.id}`;
     setOpenPanes((prev) => {
-      if (prev.some((p) => p.targetId === target.id)) {
-        return prev; // Already open
+      if (prev.some((p) => p.id === paneId)) {
+        return prev;
       }
       const newPane: PaneInfo = {
-        id: `pane-${target.id}`,
+        id: paneId,
         targetId: target.id,
         title: `${target.name} [${target.framework}]`,
         platform: target.platform,
@@ -136,6 +148,8 @@ export const App: React.FC = () => {
       };
       return [...prev, newPane];
     });
+    setActivePaneId(paneId);
+    setMaximizedPaneId(null);
   }, []);
 
   // Open combined aggregator pane
@@ -147,13 +161,15 @@ export const App: React.FC = () => {
       const combinedPane: PaneInfo = {
         id: "pane-combined",
         targetId: "all",
-        title: "🌐 All Targets (Combined Stream)",
+        title: "Combined Stream",
         platform: "universal",
         isCombined: true,
         status: "running",
       };
       return [...prev, combinedPane];
     });
+    setActivePaneId("pane-combined");
+    setMaximizedPaneId(null);
   }, []);
 
   // Load workspace data
@@ -167,20 +183,33 @@ export const App: React.FC = () => {
         setDevices(data.devices || []);
         setActiveSessions(data.active_sessions || []);
 
-        // Automatically open panes for discovered targets if currently empty
+        // Open separate tab for each discovered project target + Combined Stream tab
         if (data.targets && data.targets.length > 0) {
-          setOpenPanes((prev) => {
-            if (prev.length > 0) return prev;
-            return data.targets.map((t) => ({
-              id: `pane-${t.id}`,
-              targetId: t.id,
-              title: `${t.name} [${t.framework}]`,
-              platform: t.platform,
-              framework: t.framework,
-              isCombined: false,
-              status: "idle",
-              target: t,
-            }));
+          const targetPanes: PaneInfo[] = data.targets.map((t) => ({
+            id: `pane-${t.id}`,
+            targetId: t.id,
+            title: `${t.name} [${t.framework}]`,
+            platform: t.platform,
+            framework: t.framework,
+            isCombined: false,
+            status: "idle",
+            target: t,
+          }));
+
+          const combinedPane: PaneInfo = {
+            id: "pane-combined",
+            targetId: "all",
+            title: "Combined Stream",
+            platform: "universal",
+            isCombined: true,
+            status: "running",
+          };
+
+          const initialPanes = [...targetPanes, combinedPane];
+          setOpenPanes(initialPanes);
+          setActivePaneId((prev) => {
+            if (prev && initialPanes.some((p) => p.id === prev)) return prev;
+            return initialPanes[0]?.id || "pane-combined";
           });
         }
       } catch (err) {
@@ -310,7 +339,16 @@ export const App: React.FC = () => {
   };
 
   const handleClosePane = (paneId: string) => {
-    setOpenPanes((prev) => prev.filter((p) => p.id !== paneId));
+    setOpenPanes((prev) => {
+      const filtered = prev.filter((p) => p.id !== paneId);
+      if (activePaneId === paneId && filtered.length > 0) {
+        setActivePaneId(filtered[0].id);
+      }
+      return filtered;
+    });
+    if (maximizedPaneId === paneId) {
+      setMaximizedPaneId(null);
+    }
   };
 
   const handleClearLogs = (paneId: string) => {
@@ -365,12 +403,47 @@ export const App: React.FC = () => {
         />
 
         <main className="viewport">
+          <WorkspaceTabBar
+            panes={openPanes}
+            activePaneId={activePaneId}
+            layoutMode={layoutMode}
+            availableTargets={targets}
+            onSelectTab={(id) => {
+              setActivePaneId(id);
+              setMaximizedPaneId(null);
+            }}
+            onCloseTab={handleClosePane}
+            onChangeLayoutMode={(mode) => {
+              setLayoutMode(mode);
+              setMaximizedPaneId(null);
+            }}
+            onOpenTarget={openTargetPane}
+            onOpenCombinedStream={openCombinedPane}
+          />
+
           <TerminalGrid
             panes={openPanes}
+            activePaneId={activePaneId}
+            maximizedPaneId={maximizedPaneId}
+            layoutMode={layoutMode}
             logsByPaneId={logsByPaneId}
+            onFocusPane={(id) => setActivePaneId(id)}
             onToggleRun={handleToggleRun}
             onReload={handleReload}
             onRestart={handleRestart}
+            onSplitRight={(id) => {
+              setActivePaneId(id);
+              setLayoutMode("split-h");
+              setMaximizedPaneId(null);
+            }}
+            onSplitDown={(id) => {
+              setActivePaneId(id);
+              setLayoutMode("split-v");
+              setMaximizedPaneId(null);
+            }}
+            onToggleMaximize={(id) => {
+              setMaximizedPaneId((prev) => (prev === id ? null : id));
+            }}
             onClearLogs={handleClearLogs}
             onClosePane={handleClosePane}
             onOpenAllPanes={handleOpenAllPanes}
