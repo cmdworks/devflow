@@ -67,20 +67,40 @@ struct BootEmulatorRequest {
     name: String,
 }
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
+fn main() {
     let raw_args: Vec<String> = std::env::args().collect();
 
     // If CLI arguments were provided beyond binary name, evaluate via shared CLI engine
     if raw_args.len() > 1 {
-        let action = run_cli_args(raw_args).await?;
-        match action {
-            CliAction::Executed => return Ok(()),
-            CliAction::LaunchTui { dir } => {
-                return TuiRunner::run_hub(dir).await.map_err(|e| anyhow::anyhow!("{}", e));
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create Tokio runtime");
+
+        let action_result = rt.block_on(async {
+            run_cli_args(raw_args).await
+        });
+
+        match action_result {
+            Ok(CliAction::Executed) => return,
+            Ok(CliAction::LaunchTui { dir }) => {
+                if let Err(e) = rt.block_on(TuiRunner::run_hub(dir)) {
+                    eprintln!("TUI Error: {}", e);
+                    std::process::exit(1);
+                }
+                return;
             }
-            CliAction::LaunchGui { dir, port, open_browser } => {
-                return run_desktop_app(dir, port, open_browser).await;
+            Ok(CliAction::LaunchGui { dir, port, open_browser }) => {
+                drop(rt);
+                if let Err(e) = run_desktop_app(dir, port, open_browser) {
+                    eprintln!("GUI Error: {}", e);
+                    std::process::exit(1);
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("Error: {}", e);
+                std::process::exit(1);
             }
         }
     }
@@ -92,10 +112,13 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|p| p.parse().ok())
         .unwrap_or(9090);
 
-    run_desktop_app(current_dir, port, false).await
+    if let Err(e) = run_desktop_app(current_dir, port, false) {
+        eprintln!("Desktop GUI Error: {}", e);
+        std::process::exit(1);
+    }
 }
 
-async fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
+fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -103,12 +126,18 @@ async fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) 
         )
         .try_init();
 
-    // 1. Start embedded Axum REST & SSE backend in background task
+    // 1. Start embedded Axum REST & SSE backend on a background thread with dedicated Tokio runtime
     let ws_dir_clone = workspace_dir.clone();
-    tokio::spawn(async move {
-        if let Err(e) = start_axum_server(ws_dir_clone, port).await {
-            eprintln!("Axum server error: {}", e);
-        }
+    std::thread::spawn(move || {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create background Tokio runtime");
+        rt.block_on(async move {
+            if let Err(e) = start_axum_server(ws_dir_clone, port).await {
+                eprintln!("Axum server error: {}", e);
+            }
+        });
     });
 
     let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&workspace_dir.display().to_string()));
@@ -120,7 +149,7 @@ async fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) 
         let _ = open::that(&url);
     }
 
-    // 2. Launch Tauri v2 native window
+    // 2. Launch Tauri v2 native window on the main thread
     tauri::Builder::default()
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -6,9 +6,12 @@
 
 class DevFlowApp {
   constructor() {
-    this.apiBase = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
-      ? window.location.origin
-      : 'http://localhost:9090';
+    const isBrowserDirect = (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
+      window.location.port !== '' &&
+      !window.location.origin.includes('tauri');
+
+    this.apiBase = isBrowserDirect ? window.location.origin : 'http://127.0.0.1:9090';
 
     this.workspaceDir = '';
     this.targets = [];
