@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+cd "$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app" || exit 1
+if command -v npm >/dev/null 2>&1; then
+    exec npm run tauri -- dev "$@"
+elif command -v pnpm >/dev/null 2>&1; then
+    exec pnpm tauri dev "$@"
+elif command -v bun >/dev/null 2>&1; then
+    exec bun run tauri -- dev "$@"
+else
+    echo "Error: Node/npm not found in PATH."
+    exit 1
+fi

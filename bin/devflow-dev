@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+DEBUG_BIN="$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/target/debug/devflow-desktop"
+if [ ! -f "$DEBUG_BIN" ]; then
+    echo "⚡ Debug binary not found. Building debug binary..."
+    cargo build --manifest-path "$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/Cargo.toml"
+fi
+
+exec "$DEBUG_BIN" "$@"
