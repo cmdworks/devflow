@@ -7,6 +7,7 @@ import {
   Plus,
   Play,
   RotateCcw,
+  FolderPlus,
 } from "lucide-react";
 import type { ProjectTarget, Device, ActiveSessionInfo, PaneInfo } from "../types";
 
@@ -15,6 +16,7 @@ interface SidebarProps {
   devices: Device[];
   activeSessions: ActiveSessionInfo[];
   openPanes: PaneInfo[];
+  onOpenWorkspaceManager?: () => void;
   onOpenTargetPane: (target: ProjectTarget) => void;
   onOpenCombinedPane: () => void;
   onRefreshDevices: () => void;
@@ -26,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   devices,
   activeSessions,
   openPanes,
+  onOpenWorkspaceManager,
   onOpenTargetPane,
   onOpenCombinedPane,
   onRefreshDevices,
@@ -101,6 +104,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <Radio size={13} />
           <span>Combine All Streams</span>
         </button>
+
+        {onOpenWorkspaceManager && (
+          <button
+            className="sidebar-btn-combine"
+            style={{
+              marginTop: "6px",
+              background: "rgba(6, 182, 212, 0.08)",
+              borderColor: "rgba(6, 182, 212, 0.3)",
+              color: "#06b6d4",
+            }}
+            onClick={onOpenWorkspaceManager}
+          >
+            <FolderPlus size={13} />
+            <span style={{ fontWeight: 600 }}>Switch / Add Workspace</span>
+          </button>
+        )}
       </div>
 
       {/* Connected Devices & Emulators */}

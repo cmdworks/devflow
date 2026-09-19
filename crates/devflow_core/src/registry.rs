@@ -110,6 +110,19 @@ impl GlobalRegistry {
         }
     }
 
+    /// Remove a project from known projects registry.
+    pub fn remove_project(path: &Path) {
+        Self::ensure_dirs();
+        let file_path = Self::projects_file();
+        let mut projects = Self::list_projects();
+        let path_str = path.canonicalize().unwrap_or_else(|_| path.to_path_buf()).to_string_lossy().to_string();
+        projects.retain(|p| p.path != path_str);
+
+        if let Ok(json) = serde_json::to_string_pretty(&projects) {
+            let _ = fs::write(&file_path, json);
+        }
+    }
+
     /// Register an active live session into ~/.devflow/sessions/<id>.json
     pub fn register_session(state: &SessionState, socket_path: &Path) {
         Self::ensure_dirs();

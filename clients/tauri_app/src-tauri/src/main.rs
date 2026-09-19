@@ -13,10 +13,10 @@ use devflow_cli_core::{run_cli_args, shell, CliAction};
 use devflow_core::doctor::DoctorEngine;
 use devflow_core::event::EventBus;
 use devflow_core::project::{Project, ProjectTarget};
-use devflow_core::registry::GlobalRegistry;
+use devflow_core::registry::{GlobalRegistry, KnownProject};
 use devflow_devices::DeviceManager;
 use devflow_frameworks::session::SessionManager;
-use devflow_protocol::{Device, DoctorReport};
+use devflow_protocol::{Device, DoctorReport, Platform};
 use devflow_tui::TuiRunner;
 use futures_util::stream::Stream;
 use serde::{Deserialize, Serialize};
@@ -146,6 +146,12 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
 
             let app = Router::new()
                 .route("/api/workspace", get(handle_workspace))
+                .route(
+                    "/api/workspaces",
+                    get(handle_list_workspaces)
+                        .post(handle_add_workspace)
+                        .delete(handle_remove_workspace),
+                )
                 .route("/api/devices", get(handle_devices))
                 .route("/api/devices/boot", post(handle_boot_emulator))
                 .route("/api/doctor", get(handle_doctor))
@@ -275,6 +281,59 @@ fn serve_asset(path: &str) -> impl IntoResponse {
     }
 }
 
+#[derive(Deserialize)]
+struct WorkspacePathRequest {
+    path: String,
+}
+
+async fn handle_list_workspaces() -> Json<Vec<KnownProject>> {
+    Json(GlobalRegistry::list_projects())
+}
+
+async fn handle_add_workspace(
+    Json(req): Json<WorkspacePathRequest>,
+) -> Result<Json<WorkspaceResponse>, (StatusCode, String)> {
+    let p = PathBuf::from(&req.path);
+    if !p.exists() || !p.is_dir() {
+        return Err((StatusCode::BAD_REQUEST, format!("Directory does not exist: {}", req.path)));
+    }
+    let canonical = p.canonicalize().unwrap_or(p);
+    let name = canonical
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Workspace".to_string());
+    let targets = Project::discover_workspace_targets(&canonical);
+    let devices = DeviceManager::discover_all().await;
+    let active_sessions = GlobalRegistry::list_active_sessions();
+
+    let primary_platform = targets
+        .first()
+        .map(|t| t.platform)
+        .unwrap_or(Platform::Generic);
+    let primary_framework = targets
+        .first()
+        .map(|t| t.framework.clone())
+        .unwrap_or_else(|| "generic".to_string());
+
+    GlobalRegistry::record_project(&canonical, &name, primary_platform, &primary_framework);
+
+    Ok(Json(WorkspaceResponse {
+        workspace_name: name,
+        workspace_path: canonical.display().to_string(),
+        targets,
+        devices,
+        active_sessions,
+    }))
+}
+
+async fn handle_remove_workspace(
+    Json(req): Json<WorkspacePathRequest>,
+) -> Json<serde_json::Value> {
+    let p = PathBuf::from(&req.path);
+    GlobalRegistry::remove_project(&p);
+    Json(serde_json::json!({ "success": true }))
+}
+
 async fn handle_workspace(
     Query(query): Query<WorkspaceQuery>,
 ) -> Json<WorkspaceResponse> {
@@ -283,18 +342,31 @@ async fn handle_workspace(
         .map(PathBuf::from)
         .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")));
 
-    let workspace_name = current_dir
+    let canonical = current_dir.canonicalize().unwrap_or(current_dir);
+
+    let workspace_name = canonical
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "Workspace".to_string());
 
-    let targets = Project::discover_workspace_targets(&current_dir);
+    let targets = Project::discover_workspace_targets(&canonical);
     let devices = DeviceManager::discover_all().await;
     let active_sessions = GlobalRegistry::list_active_sessions();
 
+    let primary_platform = targets
+        .first()
+        .map(|t| t.platform)
+        .unwrap_or(Platform::Generic);
+    let primary_framework = targets
+        .first()
+        .map(|t| t.framework.clone())
+        .unwrap_or_else(|| "generic".to_string());
+
+    GlobalRegistry::record_project(&canonical, &workspace_name, primary_platform, &primary_framework);
+
     Json(WorkspaceResponse {
         workspace_name,
-        workspace_path: current_dir.display().to_string(),
+        workspace_path: canonical.display().to_string(),
         targets,
         devices,
         active_sessions,

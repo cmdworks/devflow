@@ -3,10 +3,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
 
-RELEASE_BIN="$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/target/release/devflow-desktop"
-if [ ! -f "$RELEASE_BIN" ]; then
-    echo "⚡ Release binary not found. Building release binary..."
-    cargo build --release --manifest-path "$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/Cargo.toml"
+CLI_RELEASE_BIN="$DEVFLOW_WORKSPACE_ROOT/target/release/devflow"
+if [ ! -f "$CLI_RELEASE_BIN" ]; then
+    echo "⚡ DevFlow CLI release binary not found. Building release CLI..."
+    cargo build --release --manifest-path "$DEVFLOW_WORKSPACE_ROOT/Cargo.toml" -p devflow_cli
 fi
 
-exec "$RELEASE_BIN" "$@"
+exec "$CLI_RELEASE_BIN" "$@"

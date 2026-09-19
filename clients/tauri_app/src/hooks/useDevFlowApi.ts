@@ -131,8 +131,45 @@ export function useDevFlowApi() {
     return await res.json();
   }, [apiBase]);
 
+  const fetchWorkspaces = useCallback(async (): Promise<import("../types").KnownWorkspace[]> => {
+    const res = await fetch(`${apiBase}/api/workspaces`);
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    return await res.json();
+  }, [apiBase]);
+
+  const addWorkspace = useCallback(
+    async (path: string): Promise<WorkspaceResponse> => {
+      const res = await fetch(`${apiBase}/api/workspaces`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText || `HTTP error ${res.status}`);
+      }
+      return await res.json();
+    },
+    [apiBase]
+  );
+
+  const removeWorkspace = useCallback(
+    async (path: string): Promise<{ success: boolean }> => {
+      const res = await fetch(`${apiBase}/api/workspaces`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      return await res.json();
+    },
+    [apiBase]
+  );
+
   return {
     fetchWorkspace,
+    fetchWorkspaces,
+    addWorkspace,
+    removeWorkspace,
     fetchDevices,
     bootEmulator,
     startTarget,

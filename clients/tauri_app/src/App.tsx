@@ -3,6 +3,7 @@ import { TopBar } from "./components/TopBar";
 import { Sidebar } from "./components/Sidebar";
 import { TerminalGrid } from "./components/TerminalGrid";
 import { DoctorModal } from "./components/DoctorModal";
+import { WorkspaceModal } from "./components/WorkspaceModal";
 import { useDevFlowApi } from "./hooks/useDevFlowApi";
 import { useDevFlowEvents } from "./hooks/useDevFlowEvents";
 import type {
@@ -30,6 +31,8 @@ export const App: React.FC = () => {
   const [isDoctorOpen, setIsDoctorOpen] = useState<boolean>(false);
   const [doctorReport, setDoctorReport] = useState<DoctorReport | null>(null);
   const [isDoctorLoading, setIsDoctorLoading] = useState<boolean>(false);
+
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState<boolean>(false);
 
   // Append a log entry to a specific pane
   const appendLogToPane = useCallback((paneId: string, entry: LogEntry) => {
@@ -329,7 +332,7 @@ export const App: React.FC = () => {
         workspaceName={workspaceName}
         workspacePath={workspacePath}
         devices={devices}
-        onSwitchWorkspace={handleSwitchWorkspace}
+        onOpenWorkspaceManager={() => setIsWorkspaceModalOpen(true)}
         onRunAll={handleRunAll}
         onReloadAll={handleReloadAll}
         onRestartAll={handleRestartAll}
@@ -344,6 +347,7 @@ export const App: React.FC = () => {
           devices={devices}
           activeSessions={activeSessions}
           openPanes={openPanes}
+          onOpenWorkspaceManager={() => setIsWorkspaceModalOpen(true)}
           onOpenTargetPane={openTargetPane}
           onOpenCombinedPane={openCombinedPane}
           onRefreshDevices={async () => {
@@ -380,6 +384,15 @@ export const App: React.FC = () => {
           report={doctorReport}
           isLoading={isDoctorLoading}
           onClose={() => setIsDoctorOpen(false)}
+        />
+      )}
+
+      {isWorkspaceModalOpen && (
+        <WorkspaceModal
+          currentPath={workspacePath}
+          isOpen={isWorkspaceModalOpen}
+          onClose={() => setIsWorkspaceModalOpen(false)}
+          onSelectWorkspace={handleSwitchWorkspace}
         />
       )}
     </div>

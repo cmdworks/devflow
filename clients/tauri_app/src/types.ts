@@ -39,6 +39,14 @@ export interface WorkspaceResponse {
   active_sessions: ActiveSessionInfo[];
 }
 
+export interface KnownWorkspace {
+  name: string;
+  path: string;
+  platform: string;
+  framework: string;
+  last_opened: string;
+}
+
 export interface LogEntry {
   timestamp: string;
   level: "E" | "W" | "I" | "D" | "T" | string;

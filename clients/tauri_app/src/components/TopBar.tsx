@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import {
   Layers,
   Play,
@@ -7,6 +7,8 @@ import {
   Square,
   Activity,
   Terminal as TerminalIcon,
+  Folder,
+  ChevronDown,
 } from "lucide-react";
 import type { Device } from "../types";
 
@@ -14,7 +16,7 @@ interface TopBarProps {
   workspaceName: string;
   workspacePath: string;
   devices: Device[];
-  onSwitchWorkspace: (newPath: string) => void;
+  onOpenWorkspaceManager: () => void;
   onRunAll: () => void;
   onReloadAll: () => void;
   onRestartAll: () => void;
@@ -27,7 +29,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   workspaceName,
   workspacePath,
   devices,
-  onSwitchWorkspace,
+  onOpenWorkspaceManager,
   onRunAll,
   onReloadAll,
   onRestartAll,
@@ -35,22 +37,6 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenDoctor,
   onInstallCli,
 }) => {
-  const [isEditingPath, setIsEditingPath] = useState(false);
-  const [pathInput, setPathInput] = useState(workspacePath);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      const trimmed = pathInput.trim();
-      if (trimmed) {
-        onSwitchWorkspace(trimmed);
-      }
-      setIsEditingPath(false);
-    } else if (e.key === "Escape") {
-      setPathInput(workspacePath);
-      setIsEditingPath(false);
-    }
-  };
-
   return (
     <header className="top-bar">
       <div className="top-bar-left">
@@ -60,37 +46,29 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span className="app-brand-badge">Companion</span>
         </div>
 
-        {isEditingPath ? (
-          <input
-            type="text"
-            className="workspace-path-input"
-            value={pathInput}
-            onChange={(e) => setPathInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            onBlur={() => {
-              const trimmed = pathInput.trim();
-              if (trimmed && trimmed !== workspacePath) {
-                onSwitchWorkspace(trimmed);
-              }
-              setIsEditingPath(false);
-            }}
-            autoFocus
-          />
-        ) : (
-          <button
-            className="workspace-badge-btn"
-            onClick={() => {
-              setPathInput(workspacePath);
-              setIsEditingPath(true);
-            }}
-            title="Click to change workspace path"
-          >
-            <span style={{ fontWeight: 600 }}>{workspaceName || "Workspace"}</span>
-            <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>
-              ({workspacePath.length > 28 ? `...${workspacePath.slice(-25)}` : workspacePath})
-            </span>
-          </button>
-        )}
+        <button
+          className="workspace-badge-btn"
+          onClick={onOpenWorkspaceManager}
+          title="Click to open Workspace Manager (switch or add workspace)"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "4px 10px",
+            background: "rgba(30, 41, 59, 0.7)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "6px",
+            cursor: "pointer",
+            transition: "all 0.15s ease",
+          }}
+        >
+          <Folder size={14} color="#06b6d4" />
+          <span style={{ fontWeight: 600, color: "#fff" }}>{workspaceName || "Workspace"}</span>
+          <span style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+            ({workspacePath.length > 24 ? `...${workspacePath.slice(-20)}` : workspacePath || "none"})
+          </span>
+          <ChevronDown size={13} color="var(--text-muted)" />
+        </button>
 
         <div className="top-devices-bar">
           {devices.length === 0 ? (
