@@ -1,0 +1,13 @@
+[package]
+name = "devflow_protocol"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Common protocol types, schemas, and models for DevFlow"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }

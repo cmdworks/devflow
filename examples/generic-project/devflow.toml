@@ -1,0 +1,17 @@
+[project]
+name = "sample-service"
+platform = "desktop"
+framework = "generic"
+
+[build]
+command = "cargo build"
+artifact = "target/debug/sample-service"
+
+[launch]
+command = "./target/debug/sample-service"
+
+[watch]
+paths = ["src"]
+extensions = ["rs", "toml"]
+action = "restart"
+debounce_ms = 300

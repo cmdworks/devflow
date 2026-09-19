@@ -1,0 +1,10 @@
+[project]
+name = "sample-android-app"
+platform = "android"
+framework = "kotlin"
+
+[watch]
+paths = ["app/src"]
+extensions = ["kt", "xml", "gradle", "kts"]
+action = "restart"
+debounce_ms = 400

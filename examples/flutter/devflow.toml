@@ -1,0 +1,16 @@
+[project]
+name = "sample_flutter"
+platform = "android"
+framework = "flutter"
+
+[build]
+command = "echo 'Simulating Flutter debug APK build...'"
+
+[launch]
+command = "echo 'Simulating Flutter run...'"
+
+[watch]
+paths = ["lib"]
+extensions = ["dart"]
+action = "reload"
+debounce_ms = 200

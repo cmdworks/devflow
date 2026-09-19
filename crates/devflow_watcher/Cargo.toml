@@ -1,0 +1,15 @@
+[package]
+name = "devflow_watcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "File watching, debouncing, and change classification for DevFlow"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+tokio = { workspace = true }
+notify = { workspace = true }
+notify-debouncer-mini = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }

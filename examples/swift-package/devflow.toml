@@ -1,0 +1,10 @@
+[project]
+name = "SampleSwiftCli"
+platform = "macos"
+framework = "swift"
+
+[watch]
+paths = ["Sources"]
+extensions = ["swift"]
+action = "restart"
+debounce_ms = 300

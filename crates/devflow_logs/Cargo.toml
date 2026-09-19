@@ -1,0 +1,16 @@
+[package]
+name = "devflow_logs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Log streaming, filtering, buffering, and crash grouping for DevFlow"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }
+regex = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }

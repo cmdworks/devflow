@@ -1,0 +1,29 @@
+[package]
+name = "devflow_cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Main command-line interface for DevFlow"
+
+[[bin]]
+name = "devflow"
+path = "src/main.rs"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+devflow_devices = { workspace = true }
+devflow_logs = { workspace = true }
+devflow_platforms = { workspace = true }
+devflow_frameworks = { workspace = true }
+devflow_mcp = { workspace = true }
+devflow_tui = { workspace = true }
+tokio = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+colored = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }

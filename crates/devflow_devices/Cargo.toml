@@ -1,0 +1,16 @@
+[package]
+name = "devflow_devices"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Unified device discovery and management for DevFlow"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }

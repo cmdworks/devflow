@@ -1,0 +1,11 @@
+{
+  "name": "devflow-desktop",
+  "version": "0.1.0",
+  "description": "DevFlow Desktop Companion App",
+  "private": true,
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  }
+}

@@ -1,0 +1,16 @@
+[project]
+name = "SampleReactNative"
+platform = "android"
+framework = "react-native"
+
+[build]
+command = "echo 'React Native assets bundled successfully'"
+
+[launch]
+command = "echo 'Launching React Native Dev Server'"
+
+[watch]
+paths = ["App.tsx", "package.json"]
+extensions = ["tsx", "ts", "js", "json"]
+action = "reload"
+debounce_ms = 200

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevFlow — Desktop Companion</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app" class="app-layout">
+    <!-- Top Header Navigation Bar -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="logo-badge">
+          <span class="logo-icon">⚡</span>
+          <span class="logo-text">DevFlow</span>
+        </div>
+        <span class="version-tag">Companion v0.1.0</span>
+      </div>
+
+      <div class="connection-bar">
+        <div class="server-input-group">
+          <span class="input-icon">🌐</span>
+          <input type="text" id="serverUrl" value="http://localhost:9090" placeholder="Server URL" title="DevFlow MCP HTTP Server URL">
+        </div>
+        <div class="token-input-group">
+          <span class="input-icon">🔑</span>
+          <input type="password" id="authToken" placeholder="Auth Token (optional)" title="Bearer Token">
+        </div>
+        <button id="btnConnect" class="btn-primary">Connect</button>
+        <div id="connectionStatus" class="status-badge disconnected">
+          <span class="pulse-dot"></span>
+          <span class="status-label">Disconnected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-container">
+      <!-- Left Sidebar: Devices, Session, Actions -->
+      <aside class="sidebar-panel">
+        <!-- Target Devices Section -->
+        <section class="card devices-card">
+          <div class="card-header">
+            <h3>📱 Devices & Emulators</h3>
+            <button id="btnRefreshDevices" class="btn-icon" title="Refresh Devices">↻</button>
+          </div>
+          <div id="devicesList" class="devices-list">
+            <div class="empty-state">No devices discovered yet</div>
+          </div>
+          <div class="boot-emulator-bar">
+            <input type="text" id="emulatorNameInput" placeholder="AVD / Simulator Name">
+            <button id="btnBootEmulator" class="btn-secondary">Boot</button>
+          </div>
+        </section>
+
+        <!-- Active Session Status Section -->
+        <section class="card session-card">
+          <div class="card-header">
+            <h3>⚡ Active Session</h3>
+            <span id="sessionStatusPill" class="pill pill-idle">Idle</span>
+          </div>
+          <div class="session-details">
+            <div class="detail-row">
+              <span class="detail-label">Project:</span>
+              <span id="sessionProject" class="detail-value">—</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Framework:</span>
+              <span id="sessionFramework" class="detail-value">—</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Target:</span>
+              <span id="sessionTarget" class="detail-value">—</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Build Duration:</span>
+              <span id="sessionBuildTime" class="detail-value">—</span>
+            </div>
+            <div class="metrics-grid">
+              <div class="metric-box">
+                <span class="metric-value" id="reloadCount">0</span>
+                <span class="metric-label">Reloads</span>
+              </div>
+              <div class="metric-box">
+                <span class="metric-value" id="restartCount">0</span>
+                <span class="metric-label">Restarts</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick Action Bar -->
+        <section class="card actions-card">
+          <div class="card-header">
+            <h3>🎮 Controls</h3>
+          </div>
+          <div class="actions-grid">
+            <button id="btnReload" class="btn-action btn-reload">
+              <span class="action-icon">⚡</span>
+              <span class="action-text">Reload</span>
+            </button>
+            <button id="btnRestart" class="btn-action btn-restart">
+              <span class="action-icon">🔄</span>
+              <span class="action-text">Restart</span>
+            </button>
+            <button id="btnBuild" class="btn-action btn-build">
+              <span class="action-icon">🔨</span>
+              <span class="action-text">Build</span>
+            </button>
+            <button id="btnDoctor" class="btn-action btn-doctor">
+              <span class="action-icon">🩺</span>
+              <span class="action-text">Doctor</span>
+            </button>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Center / Right Panel: Live Logs, Crashes, Diagnostics -->
+      <section class="center-panel">
+        <!-- Crash Alert Banner (hidden by default) -->
+        <div id="crashAlertBanner" class="crash-alert hidden">
+          <div class="crash-alert-header">
+            <span class="crash-icon">💥</span>
+            <div class="crash-title-group">
+              <span class="crash-type" id="crashType">Fatal Exception Detected</span>
+              <span class="crash-location" id="crashLocation">Top frame</span>
+            </div>
+            <div class="crash-actions">
+              <button id="btnDismissCrash" class="btn-sm">Dismiss</button>
+              <button id="btnCopyCrash" class="btn-sm btn-accent">Copy Report</button>
+            </div>
+          </div>
+          <div class="crash-preview" id="crashPreview">Stack trace details...</div>
+        </div>
+
+        <!-- Doctor Diagnostics Modal/Drawer -->
+        <div id="doctorModal" class="doctor-drawer hidden">
+          <div class="drawer-header">
+            <h3>🩺 Diagnostics & Health Check</h3>
+            <button id="btnCloseDoctor" class="btn-icon">✕</button>
+          </div>
+          <div id="doctorContent" class="doctor-content">
+            <p>Running environment diagnostics...</p>
+          </div>
+        </div>
+
+        <!-- Live Terminal Log Stream -->
+        <div class="terminal-card">
+          <div class="terminal-header">
+            <div class="filter-controls">
+              <button class="filter-btn active" data-level="ALL">All</button>
+              <button class="filter-btn filter-e" data-level="E">Errors</button>
+              <button class="filter-btn filter-w" data-level="W">Warnings</button>
+              <button class="filter-btn filter-i" data-level="I">Info</button>
+              <button class="filter-btn filter-d" data-level="D">Debug</button>
+            </div>
+            <div class="search-box">
+              <input type="text" id="logSearchInput" placeholder="Filter logs by tag or query...">
+            </div>
+            <div class="terminal-actions">
+              <label class="toggle-label">
+                <input type="checkbox" id="autoScrollCheck" checked>
+                <span>Auto-scroll</span>
+              </label>
+              <button id="btnClearLogs" class="btn-sm" title="Clear console">Clear</button>
+            </div>
+          </div>
+
+          <div id="logConsole" class="terminal-body">
+            <div class="log-line log-info">
+              <span class="log-time">[00:00:00]</span>
+              <span class="log-badge badge-i">INFO</span>
+              <span class="log-tag">[DevFlow]</span>
+              <span class="log-msg">DevFlow Companion initialized. Ready to connect.</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

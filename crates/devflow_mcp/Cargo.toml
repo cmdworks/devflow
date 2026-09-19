@@ -1,0 +1,24 @@
+[package]
+name = "devflow_mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Model Context Protocol (MCP) server for DevFlow"
+
+[dependencies]
+devflow_protocol = { workspace = true }
+devflow_core = { workspace = true }
+devflow_devices = { workspace = true }
+devflow_logs = { workspace = true }
+devflow_frameworks = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+axum = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }

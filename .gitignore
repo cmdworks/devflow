@@ -1,0 +1,52 @@
+# Rust / Cargo build artifacts
+target/
+**/target/
+Cargo.lock.bak
+**/*.rs.bk
+
+# Node / JS
+node_modules/
+**/node_modules/
+
+# Swift / SwiftPM build artifacts
+.build/
+**/.build/
+.swiftpm/
+**/.swiftpm/
+DerivedData/
+**/DerivedData/
+
+# Gradle / Android build artifacts
+.gradle/
+**/.gradle/
+build/
+**/build/
+*.apk
+*.aab
+
+# macOS system files
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Logs & Sockets
+*.log
+*.sock
+/logs/
+
+# Agent Docs
+.agents/docs/
+.agents/docs
+
+# IDE / Editor configs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & Temporary files
+.env
+.env.*
+*.tmp
