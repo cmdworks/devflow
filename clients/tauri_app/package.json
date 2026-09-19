@@ -4,8 +4,9 @@
   "description": "DevFlow Desktop Companion App",
   "private": true,
   "scripts": {
-    "tauri": "tauri",
-    "dev": "tauri dev",
-    "build": "tauri build"
+    "dev": "cargo run --manifest-path src-tauri/Cargo.toml",
+    "dev:mac-mtp": "cargo run --manifest-path src-tauri/Cargo.toml -- gui ../../../mac-mtp",
+    "build": "cargo build --release --manifest-path src-tauri/Cargo.toml",
+    "tauri": "tauri"
   }
 }
