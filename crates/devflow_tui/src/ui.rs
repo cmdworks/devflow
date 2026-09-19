@@ -1,5 +1,5 @@
-use crate::app::{AppMode, HubFocus, SessionPanel, TuiApp};
-use devflow_protocol::{LogLevel, SessionStatus};
+use crate::app::{AppMode, HubFocus, SessionPanel, TargetStatus, TuiApp};
+use devflow_protocol::LogLevel;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -39,7 +39,10 @@ fn render_hub_header(f: &mut Frame, app: &TuiApp, area: Rect) {
     let active_count = app.active_sessions.len();
 
     let session_badge = if active_count > 0 {
-        Span::styled(format!(" {} Active Session{} ", active_count, if active_count > 1 { "s" } else { "" }), Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD))
+        Span::styled(
+            format!(" {} Active Session{} ", active_count, if active_count > 1 { "s" } else { "" }),
+            Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD),
+        )
     } else {
         Span::styled(" 0 Active Sessions ", Style::default().fg(Color::DarkGray))
     };
@@ -101,7 +104,7 @@ fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
     let items: Vec<ListItem> = if app.targets.is_empty() {
-        vec![ListItem::new(Line::from(Span::styled(" No local targets found. Showing known projects below.", Style::default().fg(Color::DarkGray))))]
+        vec![ListItem::new(Span::styled(" No recognized framework targets in workspace", Style::default().fg(Color::DarkGray)))]
     } else {
         app.targets
             .iter()
@@ -110,19 +113,19 @@ fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
                 let is_selected = i == app.selected_target_idx;
                 let marker = if is_selected { "▶ " } else { "  " };
                 let marker_color = if is_selected { Color::Cyan } else { Color::DarkGray };
-                let name_style = if is_selected {
+
+                let target_style = if is_selected {
                     Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::Gray)
                 };
 
                 let line = Line::from(vec![
-                    Span::styled(marker, Style::default().fg(marker_color).add_modifier(Modifier::BOLD)),
-                    Span::styled(&target.name, name_style),
-                    Span::raw(" "),
-                    Span::styled(format!("[{}]", target.platform), Style::default().fg(Color::Magenta)),
-                    Span::raw(" "),
-                    Span::styled(format!("({})", target.framework), Style::default().fg(Color::DarkGray)),
+                    Span::styled(marker, Style::default().fg(marker_color)),
+                    Span::styled(format!("{}. ", i + 1), Style::default().fg(Color::DarkGray)),
+                    Span::styled(&target.name, target_style),
+                    Span::styled(format!(" [{}]", target.platform), Style::default().fg(Color::Blue)),
+                    Span::styled(format!(" ({})", target.framework), Style::default().fg(Color::Magenta)),
                 ]);
                 ListItem::new(line)
             })
@@ -144,28 +147,21 @@ fn render_hub_sessions(f: &mut Frame, app: &TuiApp, area: Rect) {
     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
     let items: Vec<ListItem> = if app.active_sessions.is_empty() {
-        vec![ListItem::new(Line::from(Span::styled(" No other sessions running on system.", Style::default().fg(Color::DarkGray))))]
+        vec![ListItem::new(Span::styled(" No other sessions running on system.", Style::default().fg(Color::DarkGray)))]
     } else {
         app.active_sessions
             .iter()
             .enumerate()
-            .map(|(i, sess)| {
+            .map(|(i, s)| {
                 let is_selected = i == app.selected_session_idx;
                 let marker = if is_selected { "● " } else { "○ " };
-                let status_color = match sess.status {
-                    SessionStatus::Running => Color::Green,
-                    SessionStatus::Building | SessionStatus::Installing | SessionStatus::Launching => Color::Cyan,
-                    SessionStatus::Reloading | SessionStatus::Restarting => Color::Yellow,
-                    SessionStatus::Failed => Color::Red,
-                    _ => Color::DarkGray,
-                };
+                let marker_color = if is_selected { Color::Green } else { Color::DarkGray };
 
                 let line = Line::from(vec![
-                    Span::styled(marker, Style::default().fg(status_color)),
-                    Span::styled(&sess.project_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" [{}]", sess.status), Style::default().fg(status_color)),
-                    Span::styled(format!(" PID:{}", sess.pid), Style::default().fg(Color::DarkGray)),
-                    Span::styled(format!(" (Reloads: {})", sess.reload_count), Style::default().fg(Color::LightYellow)),
+                    Span::styled(marker, Style::default().fg(marker_color)),
+                    Span::styled(&s.project_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+                    Span::styled(format!(" (PID {})", s.pid), Style::default().fg(Color::DarkGray)),
+                    Span::styled(format!(" [{}]", s.platform), Style::default().fg(Color::Blue)),
                 ]);
                 ListItem::new(line)
             })
@@ -192,44 +188,35 @@ fn render_hub_actions(f: &mut Frame, app: &TuiApp, area: Rect) {
         ]));
         lines.push(Line::from(vec![
             Span::styled("Platform: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", target.platform), Style::default().fg(Color::Magenta)),
+            Span::styled(format!("{}", target.platform), Style::default().fg(Color::Blue)),
             Span::styled(" | Framework: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&target.framework, Style::default().fg(Color::LightCyan)),
+            Span::styled(&target.framework, Style::default().fg(Color::Magenta)),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Path: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(target.path.display().to_string(), Style::default().fg(Color::White)),
-        ]));
-    } else if let Some(proj) = app.known_projects.get(app.selected_project_idx) {
-        lines.push(Line::from(vec![
-            Span::styled("Known Project: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&proj.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        ]));
-        lines.push(Line::from(vec![
-            Span::styled("Path: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&proj.path, Style::default().fg(Color::White)),
+            Span::styled(target.path.display().to_string(), Style::default().fg(Color::Gray)),
         ]));
     } else {
-        lines.push(Line::from(Span::styled("No target or project selected.", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled("No target selected", Style::default().fg(Color::DarkGray))));
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("Quick Actions:", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))));
+    lines.push(Line::from(Span::styled("Quick Actions:", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))));
     lines.push(Line::from(vec![
-        Span::styled(" [Enter] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::raw(" Launch Live Dev Session (Build → Install → Launch → Stream)"),
+        Span::styled(" [Enter]/[s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::raw(" Launch Selected Target"),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [r]     ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
-        Span::raw(" Send Reload Signal to Active Session (IPC)"),
+        Span::styled(" [a]         ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw(" Launch ALL Workspace Targets in Parallel"),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [R]     ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
+        Span::styled(" [r]         ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::raw(" Send Reload Signal (IPC)"),
+    ]));
+    lines.push(Line::from(vec![
+        Span::styled(" [R]         ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
         Span::raw(" Send Full App Restart Signal (IPC)"),
-    ]));
-    lines.push(Line::from(vec![
-        Span::styled(" [d]     ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw(" Run Doctor Toolchain Diagnostics"),
     ]));
 
     let block = Block::default()
@@ -276,8 +263,10 @@ fn render_hub_devices(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_hub_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
     let footer_spans = vec![
-        Span::styled(" [Enter] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::raw(" Run Dev  "),
+        Span::styled(" [Enter]/[s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::raw(" Run Target  "),
+        Span::styled(" [a] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw(" Run All  "),
         Span::styled(" [Tab] ", Style::default().fg(Color::Black).bg(Color::LightBlue).add_modifier(Modifier::BOLD)),
         Span::raw(" Switch Section  "),
         Span::styled(" [↑/↓] ", Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)),
@@ -286,8 +275,6 @@ fn render_hub_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
         Span::raw(" Reload  "),
         Span::styled(" [R] ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
         Span::raw(" Restart  "),
-        Span::styled(" [d] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw(" Doctor  "),
         Span::styled(" [q] ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
         Span::raw(" Quit"),
     ];
@@ -302,60 +289,68 @@ fn render_hub_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Session Mode: Live Development Runner (Logs, Watcher, Devices)
+// Session Mode: Multi-Target Live Development Dashboard
 // ═══════════════════════════════════════════════════════════════════════════
 
 fn render_session(f: &mut Frame, app: &TuiApp) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // Header / Status Bar
-            Constraint::Min(10),   // Main Content Area
+            Constraint::Length(3), // Target Tab Bar
+            Constraint::Min(10),   // Main Content Area (Sidebar + Logs)
             Constraint::Length(3), // Footer / Keymap
         ])
         .split(f.area());
 
-    render_session_header(f, app, chunks[0]);
+    render_session_tab_bar(f, app, chunks[0]);
     render_session_main(f, app, chunks[1]);
     render_session_footer(f, app, chunks[2]);
 }
 
-fn render_session_header(f: &mut Frame, app: &TuiApp, area: Rect) {
-    let Some(ref sess) = app.session else { return; };
-    let state = sess.get_state();
+fn render_session_tab_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
+    let mut tab_spans = Vec::new();
 
-    let status_color = match state.status {
-        SessionStatus::Running => Color::Green,
-        SessionStatus::Building | SessionStatus::Installing | SessionStatus::Launching => Color::Cyan,
-        SessionStatus::Reloading | SessionStatus::Restarting => Color::Yellow,
-        SessionStatus::Failed => Color::Red,
-        SessionStatus::Stopped | SessionStatus::Idle | SessionStatus::Detecting => Color::DarkGray,
+    // Render individual target tabs
+    for (i, state) in app.target_states.iter().enumerate() {
+        let is_active = i == app.active_tab_idx;
+
+        let status_badge = match &state.status {
+            TargetStatus::Running => Span::styled(" ● Running ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
+            TargetStatus::Building => Span::styled(" ⏳ Building... ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            TargetStatus::Error(_) => Span::styled(" ✗ Error ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+            TargetStatus::Stopped => Span::styled(" ■ Stopped ", Style::default().fg(Color::DarkGray)),
+            TargetStatus::Idle => Span::styled(" ○ Idle ", Style::default().fg(Color::DarkGray)),
+        };
+
+        let tab_style = if is_active {
+            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White).bg(Color::DarkGray)
+        };
+
+        tab_spans.push(Span::styled(format!(" [{}: {} ({})] ", i + 1, state.target.name, state.target.platform), tab_style));
+        tab_spans.push(status_badge);
+        tab_spans.push(Span::raw("  "));
+    }
+
+    // Render Combined All Logs Tab
+    let combined_idx = app.target_states.len();
+    let is_combined_active = app.active_tab_idx == combined_idx;
+    let comb_style = if is_combined_active {
+        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(Color::White).bg(Color::DarkGray)
     };
 
-    let target_dev = state.target_device.as_ref().map(|d| d.name.as_str()).unwrap_or("None");
-
-    let header_text = vec![Line::from(vec![
-        Span::styled(" ⚡ DevFlow Live ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw("  "),
-        Span::styled(format!("Project: {}", state.project_name), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-        Span::raw("  |  "),
-        Span::styled(format!("Framework: {}", state.framework), Style::default().fg(Color::Magenta)),
-        Span::raw("  |  "),
-        Span::styled(format!("Device: {}", target_dev), Style::default().fg(Color::Blue)),
-        Span::raw("  |  "),
-        Span::styled(format!("Status: {}", state.status), Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-        Span::raw("  |  "),
-        Span::styled(format!("Reloads: {}", state.reload_count), Style::default().fg(Color::Yellow)),
-        Span::raw("  "),
-        Span::styled(format!("Restarts: {}", state.restart_count), Style::default().fg(Color::LightYellow)),
-    ])];
+    tab_spans.push(Span::styled(format!(" [{}: All Logs Combined] ", combined_idx + 1), comb_style));
 
     let block = Block::default()
+        .title(" Active Targets & Log Tabs ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(Color::Cyan));
 
-    let paragraph = Paragraph::new(header_text).block(block);
+    let paragraph = Paragraph::new(Line::from(tab_spans)).block(block);
     f.render_widget(paragraph, area);
 }
 
@@ -363,8 +358,8 @@ fn render_session_main(f: &mut Frame, app: &TuiApp, area: Rect) {
     let main_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(25), // Left sidebar: Devices + Build/Changes
-            Constraint::Percentage(75), // Right main: Logs
+            Constraint::Percentage(25), // Left sidebar: Device + Status/Changes
+            Constraint::Percentage(75), // Right main: Active Target Logs
         ])
         .split(area);
 
@@ -372,7 +367,7 @@ fn render_session_main(f: &mut Frame, app: &TuiApp, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Percentage(45), // Devices panel
-            Constraint::Percentage(55), // Changes & Info panel
+            Constraint::Percentage(55), // Target status & changes
         ])
         .split(main_chunks[0]);
 
@@ -385,27 +380,31 @@ fn render_session_devices_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.session_panel == SessionPanel::Devices;
     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
-    let active_id = app.session.as_ref().and_then(|s| s.get_state().target_device.map(|d| d.id));
+    let active_device_id = if app.active_tab_idx < app.target_states.len() {
+        app.target_states[app.active_tab_idx].assigned_device.as_ref().map(|d| d.id.as_str())
+    } else {
+        None
+    };
 
     let items: Vec<ListItem> = app
         .devices
         .iter()
         .map(|d| {
-            let is_selected = active_id.as_deref() == Some(&d.id);
-            let marker = if is_selected { "● " } else { "○ " };
-            let marker_color = if is_selected { Color::Green } else { Color::DarkGray };
+            let is_matched = active_device_id == Some(d.id.as_str());
+            let marker = if is_matched { "● " } else { "○ " };
+            let marker_color = if is_matched { Color::Green } else { Color::DarkGray };
 
             let text = Line::from(vec![
                 Span::styled(marker, Style::default().fg(marker_color)),
-                Span::styled(&d.name, Style::default().fg(if is_selected { Color::White } else { Color::Gray })),
-                Span::styled(format!(" ({})", d.platform), Style::default().fg(Color::DarkGray)),
+                Span::styled(&d.name, Style::default().fg(if is_matched { Color::White } else { Color::Gray }).add_modifier(if is_matched { Modifier::BOLD } else { Modifier::empty() })),
+                Span::styled(format!(" [{}]", d.platform), Style::default().fg(Color::DarkGray)),
             ]);
             ListItem::new(text)
         })
         .collect();
 
     let block = Block::default()
-        .title(" Devices ")
+        .title(" Assigned Devices ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
@@ -420,9 +419,30 @@ fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 
     let mut lines = Vec::new();
 
-    if let Some(ref sess) = app.session {
-        let state = sess.get_state();
-        if let Some(dur) = state.build_duration_ms {
+    if app.active_tab_idx < app.target_states.len() {
+        let state = &app.target_states[app.active_tab_idx];
+        lines.push(Line::from(vec![
+            Span::styled("Target: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&state.target.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Platform: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{}", state.target.platform), Style::default().fg(Color::Blue)),
+            Span::styled(" (", Style::default().fg(Color::DarkGray)),
+            Span::styled(&state.target.framework, Style::default().fg(Color::Magenta)),
+            Span::styled(")", Style::default().fg(Color::DarkGray)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{}", state.status), Style::default().fg(match state.status {
+                TargetStatus::Running => Color::Green,
+                TargetStatus::Building => Color::Yellow,
+                TargetStatus::Error(_) => Color::Red,
+                _ => Color::DarkGray,
+            })),
+        ]));
+
+        if let Some(dur) = state.last_build_duration_ms {
             lines.push(Line::from(vec![
                 Span::styled("Last Build: ", Style::default().fg(Color::DarkGray)),
                 Span::styled(format!("{}ms", dur), Style::default().fg(Color::Green)),
@@ -435,21 +455,31 @@ fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
                 Span::styled(err.clone(), Style::default().fg(Color::LightRed)),
             ]));
         }
-    }
 
-    lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("Recent Changes:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
-
-    if app.changes.is_empty() {
-        lines.push(Line::from(Span::styled(" Watching for changes...", Style::default().fg(Color::DarkGray))));
-    } else {
-        for change in app.changes.iter().rev().take(6) {
-            lines.push(Line::from(Span::styled(format!(" {}", change), Style::default().fg(Color::Yellow))));
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled("File Changes:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+        if state.changes.is_empty() {
+            lines.push(Line::from(Span::styled(" Watching for changes...", Style::default().fg(Color::DarkGray))));
+        } else {
+            for change in state.changes.iter().rev().take(5) {
+                lines.push(Line::from(Span::styled(format!(" {}", change), Style::default().fg(Color::Yellow))));
+            }
         }
+    } else {
+        lines.push(Line::from(Span::styled("Combined View: All Workspace Targets", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))));
+        lines.push(Line::from(vec![
+            Span::styled("Total Targets: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{}", app.target_states.len()), Style::default().fg(Color::Cyan)),
+        ]));
+        let running_count = app.target_states.iter().filter(|s| s.status == TargetStatus::Running).count();
+        lines.push(Line::from(vec![
+            Span::styled("Running: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("{}/{}", running_count, app.target_states.len()), Style::default().fg(Color::Green)),
+        ]));
     }
 
     let block = Block::default()
-        .title(" Status & Changes ")
+        .title(" Target Status & Watcher ")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(border_color));
@@ -462,18 +492,31 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.session_panel == SessionPanel::Logs;
     let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
 
-    let lvl_filter_text = match app.log_level_filter {
+    let (logs_ref, scroll_offset, auto_scroll, level_filter, target_title) = if app.active_tab_idx < app.target_states.len() {
+        let state = &app.target_states[app.active_tab_idx];
+        (&state.logs, state.log_scroll_offset, state.auto_scroll, state.log_level_filter, format!("Logs: {} [{}]", state.target.name, state.target.platform))
+    } else {
+        (&app.combined_logs, app.combined_scroll_offset, app.combined_auto_scroll, app.combined_level_filter, "Logs: All Targets Combined".to_string())
+    };
+
+    let lvl_filter_text = match level_filter {
         Some(lvl) => format!(" [Level: {}] ", lvl),
         None => " [All Levels] ".to_string(),
     };
 
-    let title = format!(" Logs{} ", lvl_filter_text);
+    let scroll_badge = if auto_scroll {
+        " [Auto-scroll: ON] ".to_string()
+    } else {
+        format!(" [Scroll: +{} | Auto-scroll: OFF] ", scroll_offset)
+    };
+
+    let title = format!(" {} ({} lines){}{} ", target_title, logs_ref.len(), lvl_filter_text, scroll_badge);
 
     let max_lines = area.height.saturating_sub(2) as usize;
-    let total_logs = app.logs.len();
+    let total_logs = logs_ref.len();
 
     let (start, end) = if total_logs > max_lines {
-        let skip_from_end = app.log_scroll_offset;
+        let skip_from_end = scroll_offset;
         let start = total_logs.saturating_sub(max_lines + skip_from_end);
         let end = total_logs.saturating_sub(skip_from_end);
         (start, end)
@@ -481,8 +524,7 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
         (0, total_logs)
     };
 
-    let items: Vec<ListItem> = app
-        .logs
+    let items: Vec<ListItem> = logs_ref
         .range(start..end)
         .map(|entry| {
             let (level_badge, badge_color) = match entry.level {
@@ -518,20 +560,24 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_session_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
     let footer_spans = vec![
-        Span::styled(" [Esc] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::raw(" Back to Hub  "),
+        Span::styled(" [1-9] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw(" Switch Tab  "),
+        Span::styled(" [h/l] ", Style::default().fg(Color::Black).bg(Color::LightBlue).add_modifier(Modifier::BOLD)),
+        Span::raw(" Prev/Next Tab  "),
+        Span::styled(" [s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::raw(" Start/Stop  "),
+        Span::styled(" [a] ", Style::default().fg(Color::Black).bg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::raw(" Run All  "),
         Span::styled(" [r] ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
         Span::raw(" Reload  "),
         Span::styled(" [R] ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
         Span::raw(" Restart  "),
-        Span::styled(" [l] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
-        Span::raw(" Filter Level  "),
-        Span::styled(" [Tab] ", Style::default().fg(Color::Black).bg(Color::LightBlue).add_modifier(Modifier::BOLD)),
-        Span::raw(" Switch Panel  "),
         Span::styled(" [↑/↓] ", Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)),
         Span::raw(" Scroll  "),
-        Span::styled(" [q] ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
-        Span::raw(" Quit"),
+        Span::styled(" [f] ", Style::default().fg(Color::Black).bg(Color::Blue).add_modifier(Modifier::BOLD)),
+        Span::raw(" Follow  "),
+        Span::styled(" [Esc] ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::raw(" Hub"),
     ];
 
     let block = Block::default()

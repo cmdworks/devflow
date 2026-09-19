@@ -524,19 +524,23 @@ async fn handle_logs(
 
                 if let Ok(out) = output {
                     let text = String::from_utf8_lossy(&out.stdout);
-                    let mut count = 0;
-                    for line in text.lines() {
+                    let mut entries = Vec::new();
+                    for line in text.lines().rev() {
                         let entry = LogParser::parse_line(line, Some("logcat"));
                         if matches_filter(&entry) {
-                            format_entry(&entry);
-                            count += 1;
-                            if count >= limit {
+                            entries.push(entry);
+                            if entries.len() >= limit {
                                 break;
                             }
                         }
                     }
-                    if count == 0 {
+                    if entries.is_empty() {
                         println!("{}", "No matching logs found in device buffer.".yellow());
+                    } else {
+                        entries.reverse();
+                        for entry in &entries {
+                            format_entry(entry);
+                        }
                     }
                     return Ok(());
                 }
