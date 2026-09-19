@@ -161,7 +161,7 @@ pub enum Commands {
         path: PathBuf,
 
         /// Server port
-        #[arg(short, long, default_value = "9090")]
+        #[arg(short, long, default_value = "9292")]
         port: u16,
 
         /// Do not automatically open browser
@@ -176,7 +176,7 @@ pub enum Commands {
         path: PathBuf,
 
         /// Server port
-        #[arg(short, long, default_value = "9090")]
+        #[arg(short, long, default_value = "9292")]
         port: u16,
 
         /// Do not automatically open browser
@@ -233,7 +233,7 @@ pub enum McpCommands {
         http: bool,
 
         /// Port for HTTP server
-        #[arg(short, long, default_value = "9090")]
+        #[arg(short, long, default_value = "9292")]
         port: u16,
 
         /// Optional bearer authentication token for HTTP mode (or DEVFLOW_AUTH_TOKEN env var)
@@ -258,7 +258,7 @@ where
         let current_dir = std::env::current_dir()?;
         return Ok(CliAction::LaunchGui {
             dir: current_dir,
-            port: 9090,
+            port: 9292,
             open_browser: true,
         });
     }

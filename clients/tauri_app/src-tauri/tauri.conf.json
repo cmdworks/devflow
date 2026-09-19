@@ -10,7 +10,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
+        "label": "main",
         "title": "DevFlow Desktop Companion",
+        "url": "http://localhost:9292",
         "width": 1280,
         "height": 840,
         "minWidth": 900,

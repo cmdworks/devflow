@@ -26,7 +26,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tracing::{info, warn};
 
 #[derive(Clone)]
@@ -111,7 +111,7 @@ fn main() {
     let port = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
-        .unwrap_or(9090);
+        .unwrap_or(9292);
 
     if let Err(e) = run_desktop_app(current_dir, port, false) {
         eprintln!("Desktop GUI Error: {}", e);
@@ -119,7 +119,7 @@ fn main() {
     }
 }
 
-fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
+fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -128,74 +128,110 @@ fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) -> any
         .try_init();
 
     // 1. Start embedded Axum REST & SSE backend on a background thread with dedicated Tokio runtime
-    let ws_dir_clone = workspace_dir.clone();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+
     std::thread::spawn(move || {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("Failed to create background Tokio runtime");
         rt.block_on(async move {
-            if let Err(e) = start_axum_server(ws_dir_clone, port).await {
-                eprintln!("Axum server error: {}", e);
+            let event_bus = EventBus::new(2000);
+            let state = AppState {
+                event_bus,
+                active_sessions: Arc::new(Mutex::new(HashMap::new())),
+            };
+
+            let cors = CorsLayer::permissive();
+
+            let app = Router::new()
+                .route("/", get(handle_index))
+                .route("/index.html", get(handle_index))
+                .route("/style.css", get(handle_style))
+                .route("/app.js", get(handle_app_js))
+                .route("/terminal-engine.js", get(handle_terminal_engine_js))
+                .route("/api/workspace", get(handle_workspace))
+                .route("/api/devices", get(handle_devices))
+                .route("/api/devices/boot", post(handle_boot_emulator))
+                .route("/api/doctor", get(handle_doctor))
+                .route("/api/shell/install", post(handle_shell_install))
+                .route("/api/shell/uninstall", post(handle_shell_uninstall))
+                .route("/api/target/start", post(handle_start_target))
+                .route("/api/target/stop", post(handle_stop_target))
+                .route("/api/target/reload", post(handle_reload_target))
+                .route("/api/target/restart", post(handle_restart_target))
+                .route("/api/workspace/reload-all", post(handle_reload_all))
+                .route("/api/workspace/restart-all", post(handle_restart_all))
+                .route("/api/events", get(handle_events_sse))
+                .layer(cors)
+                .with_state(state);
+
+            // Attempt to bind starting from base_port up to base_port + 20
+            let mut bound_listener = None;
+            let mut actual_port = base_port;
+
+            for offset in 0..20 {
+                let candidate_port = base_port + offset;
+                let addr = SocketAddr::from(([127, 0, 0, 1], candidate_port));
+                match tokio::net::TcpListener::bind(addr).await {
+                    Ok(listener) => {
+                        actual_port = candidate_port;
+                        bound_listener = Some((listener, addr));
+                        break;
+                    }
+                    Err(_) => continue,
+                }
+            }
+
+            match bound_listener {
+                Some((listener, addr)) => {
+                    info!("DevFlow backend server listening on http://{}", addr);
+                    let _ = ready_tx.send(Ok(actual_port));
+                    if let Err(e) = axum::serve(listener, app).await {
+                        eprintln!("Axum server error: {}", e);
+                    }
+                }
+                None => {
+                    let err_msg = format!("Failed to find open port between {} and {}", base_port, base_port + 20);
+                    eprintln!("{}", err_msg);
+                    let _ = ready_tx.send(Err(err_msg));
+                }
             }
         });
     });
 
-    let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&workspace_dir.display().to_string()));
+    // Wait until server is bound and retrieve the actual port
+    let bound_port = match ready_rx.recv() {
+        Ok(Ok(p)) => p,
+        Ok(Err(e)) => return Err(anyhow::anyhow!("{}", e)),
+        Err(e) => return Err(anyhow::anyhow!("Failed to initialize backend thread: {}", e)),
+    };
+
+    let url_str = format!("http://localhost:{}?dir={}", bound_port, urlencoding_simple(&workspace_dir.display().to_string()));
+    let url_for_nav = url_str.clone();
+
     println!("\n{}", "═══ DevFlow Desktop Companion App ═══".cyan().bold());
-    println!("⚡ Native Desktop Window & Server running at: {}", url.underline());
+    println!("⚡ Native Desktop Window & Server running at: {}", url_str.underline());
     println!("Workspace: {}", workspace_dir.display().to_string().dimmed());
 
     if open_browser {
-        let _ = open::that(&url);
+        let _ = open::that(&url_str);
     }
 
-    // 2. Launch Tauri v2 native window on the main thread
+    // 2. Launch Tauri v2 native window on the main thread and navigate to the running backend
     tauri::Builder::default()
+        .setup(move |app| {
+            use tauri::Manager;
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(parsed_url) = url_for_nav.parse() {
+                    let _ = window.navigate(parsed_url);
+                }
+            }
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 
-    Ok(())
-}
-
-async fn start_axum_server(_workspace_dir: PathBuf, port: u16) -> anyhow::Result<()> {
-    let event_bus = EventBus::new(2000);
-    let state = AppState {
-        event_bus,
-        active_sessions: Arc::new(Mutex::new(HashMap::new())),
-    };
-
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
-
-    let app = Router::new()
-        .route("/", get(handle_index))
-        .route("/index.html", get(handle_index))
-        .route("/style.css", get(handle_style))
-        .route("/app.js", get(handle_app_js))
-        .route("/terminal-engine.js", get(handle_terminal_engine_js))
-        .route("/api/workspace", get(handle_workspace))
-        .route("/api/devices", get(handle_devices))
-        .route("/api/devices/boot", post(handle_boot_emulator))
-        .route("/api/doctor", get(handle_doctor))
-        .route("/api/shell/install", post(handle_shell_install))
-        .route("/api/shell/uninstall", post(handle_shell_uninstall))
-        .route("/api/target/start", post(handle_start_target))
-        .route("/api/target/stop", post(handle_stop_target))
-        .route("/api/target/reload", post(handle_reload_target))
-        .route("/api/target/restart", post(handle_restart_target))
-        .route("/api/workspace/reload-all", post(handle_reload_all))
-        .route("/api/workspace/restart-all", post(handle_restart_all))
-        .route("/api/events", get(handle_events_sse))
-        .layer(cors)
-        .with_state(state);
-
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let listener = tokio::net::TcpListener::bind(addr).await?;
-    info!("Axum server listening on {}", addr);
-    axum::serve(listener, app).await?;
     Ok(())
 }
 
