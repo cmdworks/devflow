@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::{
         sse::{Event, KeepAlive, Sse},
-        Html, IntoResponse,
+        IntoResponse,
     },
     routing::{get, post},
     Json, Router,
@@ -145,11 +145,6 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
             let cors = CorsLayer::permissive();
 
             let app = Router::new()
-                .route("/", get(handle_index))
-                .route("/index.html", get(handle_index))
-                .route("/style.css", get(handle_style))
-                .route("/app.js", get(handle_app_js))
-                .route("/terminal-engine.js", get(handle_terminal_engine_js))
                 .route("/api/workspace", get(handle_workspace))
                 .route("/api/devices", get(handle_devices))
                 .route("/api/devices/boot", post(handle_boot_emulator))
@@ -163,6 +158,8 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 .route("/api/workspace/reload-all", post(handle_reload_all))
                 .route("/api/workspace/restart-all", post(handle_restart_all))
                 .route("/api/events", get(handle_events_sse))
+                .route("/", get(index_handler))
+                .route("/{*path}", get(static_handler))
                 .layer(cors)
                 .with_state(state);
 
@@ -239,24 +236,43 @@ fn urlencoding_simple(s: &str) -> String {
     s.replace(' ', "%20").replace('/', "%2F")
 }
 
-async fn handle_index() -> impl IntoResponse {
-    let content = include_str!("../../ui/index.html");
-    Html(content)
+#[derive(rust_embed::Embed)]
+#[folder = "../dist"]
+struct FrontendAssets;
+
+async fn index_handler() -> impl IntoResponse {
+    serve_asset("index.html")
 }
 
-async fn handle_style() -> impl IntoResponse {
-    let content = include_str!("../../ui/style.css");
-    ([(axum::http::header::CONTENT_TYPE, "text/css")], content)
+async fn static_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+    let clean_path = path.trim_start_matches('/');
+    serve_asset(clean_path)
 }
 
-async fn handle_app_js() -> impl IntoResponse {
-    let content = include_str!("../../ui/app.js");
-    ([(axum::http::header::CONTENT_TYPE, "application/javascript")], content)
-}
+fn serve_asset(path: &str) -> impl IntoResponse {
+    let asset_path = if path.is_empty() { "index.html" } else { path };
 
-async fn handle_terminal_engine_js() -> impl IntoResponse {
-    let content = include_str!("../../ui/terminal-engine.js");
-    ([(axum::http::header::CONTENT_TYPE, "application/javascript")], content)
+    match FrontendAssets::get(asset_path) {
+        Some(content) => {
+            let mime = mime_guess::from_path(asset_path).first_or_octet_stream();
+            (
+                [(axum::http::header::CONTENT_TYPE, mime.as_ref())],
+                content.data.into_owned(),
+            )
+                .into_response()
+        }
+        None => {
+            if let Some(index_content) = FrontendAssets::get("index.html") {
+                (
+                    [(axum::http::header::CONTENT_TYPE, "text/html")],
+                    index_content.data.into_owned(),
+                )
+                    .into_response()
+            } else {
+                (StatusCode::NOT_FOUND, "404 Not Found").into_response()
+            }
+        }
+    }
 }
 
 async fn handle_workspace(

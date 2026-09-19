@@ -1,15 +1,36 @@
 {
   "name": "devflow-desktop",
   "version": "0.1.0",
-  "description": "DevFlow Desktop Companion App",
+  "description": "DevFlow Desktop Companion App with React & TermaxWeb",
   "private": true,
+  "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "dev:native": "tauri dev",
-    "build": "tauri build",
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
     "tauri": "tauri"
   },
+  "dependencies": {
+    "@termaxjs/web": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/web",
+    "@termaxjs/web-addons": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/addons",
+    "@termaxjs/web-adapter": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/adapter",
+    "@termaxjs/web-ai": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/ai",
+    "@termaxjs/web-core": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/core",
+    "@termaxjs/web-react": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/react",
+    "@termaxjs/web-source-control": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/source-control",
+    "@termaxjs/web-ui": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/ui",
+    "@termaxjs/web-ui-components": "file:/Users/as/Dev/Projects/opensources/termaxui/packages/ui-components",
+    "lucide-react": "^0.475.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.11.4"
+    "@tauri-apps/cli": "^2.2.0",
+    "@types/node": "^22.13.0",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.0"
   }
 }
