@@ -44,9 +44,13 @@ pub struct Cli {
     #[arg(short = 'C', long = "dir", global = true)]
     pub dir: Option<PathBuf>,
 
-    /// Launch GUI desktop / web companion app
+    /// Launch GUI desktop companion app
     #[arg(long = "gui", global = true)]
     pub gui: bool,
+
+    /// Open in external web browser
+    #[arg(long = "web", global = true)]
+    pub web: bool,
 
     /// Set verbose output level
     #[arg(short, long, global = true)]
@@ -164,9 +168,9 @@ pub enum Commands {
         #[arg(short, long, default_value = "9292")]
         port: u16,
 
-        /// Do not automatically open browser
+        /// Open web companion in external browser
         #[arg(long)]
-        no_open: bool,
+        web: bool,
     },
 
     /// Open workspace in DevFlow GUI (alias for 'gui')
@@ -179,9 +183,9 @@ pub enum Commands {
         #[arg(short, long, default_value = "9292")]
         port: u16,
 
-        /// Do not automatically open browser
+        /// Open web companion in external browser
         #[arg(long)]
-        no_open: bool,
+        web: bool,
     },
 
     /// Manage Shell integration, PATH symlinks, and VS Code terminal bindings
@@ -254,12 +258,12 @@ where
         std::env::set_current_dir(dir)?;
     }
 
-    if cli.gui {
+    if cli.gui || cli.web {
         let current_dir = std::env::current_dir()?;
         return Ok(CliAction::LaunchGui {
             dir: current_dir,
             port: 9292,
-            open_browser: true,
+            open_browser: cli.web,
         });
     }
 
@@ -332,12 +336,12 @@ where
                 handle_preview().await?;
                 Ok(CliAction::Executed)
             }
-            Commands::Gui { path, port, no_open } | Commands::Open { path, port, no_open } => {
+            Commands::Gui { path, port, web } | Commands::Open { path, port, web } => {
                 let resolved = path.canonicalize().unwrap_or(path);
                 Ok(CliAction::LaunchGui {
                     dir: resolved,
                     port,
-                    open_browser: !no_open,
+                    open_browser: web || cli.web,
                 })
             }
             Commands::Shell { command } => match command {
