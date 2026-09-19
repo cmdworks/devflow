@@ -2,19 +2,26 @@
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "DevFlow Desktop",
   "version": "0.1.0",
-  "identifier": "com.devflow.desktop",
+  "identifier": "com.cmdworks.devflow",
   "build": {
     "frontendDist": "../ui"
   },
   "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "DevFlow Desktop Companion",
-        "width": 1200,
-        "height": 800,
+        "width": 1280,
+        "height": 840,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
-        "decorations": true
+        "decorations": true,
+        "theme": "Dark"
       }
-    ]
+    ],
+    "security": {
+      "csp": null
+    }
   }
 }

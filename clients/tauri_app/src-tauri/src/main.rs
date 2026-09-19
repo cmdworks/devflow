@@ -80,22 +80,22 @@ async fn main() -> anyhow::Result<()> {
                 return TuiRunner::run_hub(dir).await.map_err(|e| anyhow::anyhow!("{}", e));
             }
             CliAction::LaunchGui { dir, port, open_browser } => {
-                return run_gui_server(dir, port, open_browser).await;
+                return run_desktop_app(dir, port, open_browser).await;
             }
         }
     }
 
-    // Default: launched without args (e.g. double clicked or 'devflow-desktop') -> launch Desktop GUI
+    // Default: launched without args -> launch Desktop GUI window & backend
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let port = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(9090);
 
-    run_gui_server(current_dir, port, true).await
+    run_desktop_app(current_dir, port, false).await
 }
 
-async fn run_gui_server(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
+async fn run_desktop_app(workspace_dir: PathBuf, port: u16, open_browser: bool) -> anyhow::Result<()> {
     let _ = tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -103,6 +103,32 @@ async fn run_gui_server(workspace_dir: PathBuf, port: u16, open_browser: bool) -
         )
         .try_init();
 
+    // 1. Start embedded Axum REST & SSE backend in background task
+    let ws_dir_clone = workspace_dir.clone();
+    tokio::spawn(async move {
+        if let Err(e) = start_axum_server(ws_dir_clone, port).await {
+            eprintln!("Axum server error: {}", e);
+        }
+    });
+
+    let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&workspace_dir.display().to_string()));
+    println!("\n{}", "═══ DevFlow Desktop Companion App ═══".cyan().bold());
+    println!("⚡ Native Desktop Window & Server running at: {}", url.underline());
+    println!("Workspace: {}", workspace_dir.display().to_string().dimmed());
+
+    if open_browser {
+        let _ = open::that(&url);
+    }
+
+    // 2. Launch Tauri v2 native window
+    tauri::Builder::default()
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+
+    Ok(())
+}
+
+async fn start_axum_server(_workspace_dir: PathBuf, port: u16) -> anyhow::Result<()> {
     let event_bus = EventBus::new(2000);
     let state = AppState {
         event_bus,
@@ -137,20 +163,9 @@ async fn run_gui_server(workspace_dir: PathBuf, port: u16, open_browser: bool) -
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&workspace_dir.display().to_string()));
-    
-    info!("⚡ DevFlow Desktop GUI Server running at {}", url);
-    println!("\n{}", "═══ DevFlow Desktop Companion App ═══".cyan().bold());
-    println!("⚡ GUI Server running at: {}", url.underline());
-    println!("Workspace: {}", workspace_dir.display().to_string().dimmed());
-
-    if open_browser {
-        let _ = open::that(&url);
-    }
-
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    info!("Axum server listening on {}", addr);
     axum::serve(listener, app).await?;
-
     Ok(())
 }
 
