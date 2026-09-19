@@ -45,13 +45,19 @@ impl PlatformRunner for DesktopPlatformRunner {
         let program = parts.next().ok_or_else(|| DevflowError::Launch("Empty launch command".to_string()))?;
         let args: Vec<&str> = parts.collect();
 
-        let child = Command::new(program)
+        let resolved_program = if std::path::Path::new(program).is_relative() && project_dir.join(program).exists() {
+            project_dir.join(program)
+        } else {
+            std::path::PathBuf::from(program)
+        };
+
+        let child = Command::new(&resolved_program)
             .args(&args)
             .current_dir(project_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| DevflowError::Launch(format!("Failed to spawn process '{}': {}", cmd_str, e)))?;
+            .map_err(|e| DevflowError::Launch(format!("Failed to spawn process '{}' ({}): {}", cmd_str, resolved_program.display(), e)))?;
 
         let mut lock = self.active_child.lock().await;
         *lock = Some(child);

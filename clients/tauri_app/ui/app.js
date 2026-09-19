@@ -516,8 +516,39 @@ class DevFlowApp {
   // ═══════════════════════════════════════════════════════════════════════════
 
   async toggleTargetRun(target) {
+    const pane = this.openPanes.find(p => p.targetId === target.id);
     const statusPill = document.getElementById(`status-${target.id}`);
     const btnRun = document.querySelector(`#pane-${target.id} .btn-run-target`);
+
+    const isRunning = btnRun && btnRun.textContent.includes('Stop');
+
+    if (isRunning) {
+      if (btnRun) btnRun.textContent = 'Stopping...';
+      try {
+        await fetch(`${this.apiBase}/api/target/stop`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target_id: target.id })
+        });
+        if (statusPill) {
+          statusPill.className = 'pane-status-pill idle';
+          statusPill.textContent = 'Idle';
+        }
+        if (btnRun) btnRun.textContent = '▶ Run';
+        this.updateDot(target.id, 'idle');
+        if (pane && pane.engine) {
+          pane.engine.appendLog({
+            timestamp: new Date().toISOString(),
+            level: 'I',
+            tag: 'client',
+            message: `■ Target '${target.name}' stopped.`
+          });
+        }
+      } catch (e) {
+        console.error('Failed to stop target:', e);
+      }
+      return;
+    }
 
     // Find matched device
     const matchedDev = this.devices.find(d => {
@@ -526,10 +557,22 @@ class DevFlowApp {
       return true;
     });
 
+    if (pane && pane.engine) {
+      pane.engine.appendLog({
+        timestamp: new Date().toISOString(),
+        level: 'I',
+        tag: 'client',
+        message: `▶ Requesting build & run for '${target.name}' [${target.framework}]...`
+      });
+    }
+
     try {
       if (statusPill) {
         statusPill.className = 'pane-status-pill building';
         statusPill.textContent = 'Building...';
+      }
+      if (btnRun) {
+        btnRun.textContent = '■ Stop';
       }
 
       const res = await fetch(`${this.apiBase}/api/target/start`, {
@@ -549,22 +592,41 @@ class DevFlowApp {
           statusPill.className = 'pane-status-pill running';
           statusPill.textContent = 'Running';
         }
-        if (btnRun) {
-          btnRun.textContent = '■ Stop';
-        }
         this.updateDot(target.id, 'running');
       } else {
         if (statusPill) {
           statusPill.className = 'pane-status-pill error';
           statusPill.textContent = 'Error';
         }
+        if (btnRun) {
+          btnRun.textContent = '▶ Run';
+        }
         this.updateDot(target.id, 'error');
+        if (pane && pane.engine) {
+          pane.engine.appendLog({
+            timestamp: new Date().toISOString(),
+            level: 'E',
+            tag: 'client',
+            message: `✗ Failed to launch target: ${data.error || 'Unknown error'}`
+          });
+        }
       }
     } catch (e) {
       console.error('Failed to start target:', e);
       if (statusPill) {
         statusPill.className = 'pane-status-pill error';
         statusPill.textContent = 'Error';
+      }
+      if (btnRun) {
+        btnRun.textContent = '▶ Run';
+      }
+      if (pane && pane.engine) {
+        pane.engine.appendLog({
+          timestamp: new Date().toISOString(),
+          level: 'E',
+          tag: 'client',
+          message: `✗ Network / backend error: ${e.message}`
+        });
       }
     }
   }
