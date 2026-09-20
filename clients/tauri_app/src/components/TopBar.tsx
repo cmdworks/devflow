@@ -6,111 +6,149 @@ import {
   RotateCw,
   Square,
   Activity,
-  Terminal,
   Smartphone,
-  FolderGit2,
+  ChevronRight,
+  Settings,
 } from "lucide-react";
-import type { ViewMode } from "./Sidebar";
+import type { ViewSection, Device } from "../types";
 
 interface TopBarProps {
-  activeView: ViewMode;
-  onSelectView: (view: ViewMode) => void;
+  workspaceName: string;
+  activeSection: ViewSection;
+  devices: Device[];
+  onSelectSection: (section: ViewSection) => void;
   onRunAll: () => void;
   onReloadAll: () => void;
   onRestartAll: () => void;
   onStopAll: () => void;
-  onInstallCli: () => void;
+  onOpenSettings: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
-  activeView,
-  onSelectView,
+  workspaceName,
+  activeSection,
+  devices,
+  onSelectSection,
   onRunAll,
   onReloadAll,
   onRestartAll,
   onStopAll,
-  onInstallCli,
+  onOpenSettings,
 }) => {
+  const onlineDevicesCount = devices.filter(
+    (d) => d.online || d.state === "device" || d.state === "booted"
+  ).length;
+
+  const sectionLabelMap: Record<ViewSection, string> = {
+    overview: "Overview",
+    targets: "Targets & Matrix",
+    terminal: "Terminal Logs",
+    devices: "Devices & Emulators",
+    doctor: "Doctor Diagnostics",
+    settings: "Settings",
+  };
+
   return (
     <header className="top-bar">
-      {/* Left: Brand + Navigation View Mode Switcher */}
+      {/* 1. Left: Brand & Breadcrumb */}
       <div className="top-bar-left">
-        <div className="app-brand">
-          <Layers size={17} color="#06b6d4" />
-          <span>DevFlow</span>
-          <span className="app-brand-badge">PRO</span>
+        <div className="app-brand" onClick={() => onSelectSection("overview")} style={{ cursor: "pointer" }}>
+          <Layers size={16} color="#06b6d4" />
+          <span className="brand-name">DevFlow</span>
+          <span className="brand-badge">PRO</span>
         </div>
 
-        <nav className="top-nav-tabs">
-          <button
-            className={`top-nav-btn ${activeView === "terminal" ? "active" : ""}`}
-            onClick={() => onSelectView("terminal")}
-            title="Terminal Log Streams (Termax Web Engine)"
+        <div className="top-bar-breadcrumb">
+          <span className="breadcrumb-sep">
+            <ChevronRight size={12} />
+          </span>
+          <span
+            className="breadcrumb-item workspace-name"
+            onClick={() => onSelectSection("overview")}
+            title="Jump to Workspace Overview"
           >
-            <Terminal size={13} />
-            <span>Terminal</span>
-          </button>
-
-          <button
-            className={`top-nav-btn ${activeView === "targets" ? "active" : ""}`}
-            onClick={() => onSelectView("targets")}
-            title="Workspace Targets & Subprojects"
-          >
-            <FolderGit2 size={13} />
-            <span>Targets</span>
-          </button>
-
-          <button
-            className={`top-nav-btn ${activeView === "devices" ? "active" : ""}`}
-            onClick={() => onSelectView("devices")}
-            title="Devices & Emulators Hub"
-          >
-            <Smartphone size={13} />
-            <span>Devices</span>
-          </button>
-
-          <button
-            className={`top-nav-btn ${activeView === "doctor" ? "active" : ""}`}
-            onClick={() => onSelectView("doctor")}
-            title="Toolchain & Environment Diagnostics"
-          >
-            <Activity size={13} />
-            <span>Doctor</span>
-          </button>
-        </nav>
+            {workspaceName}
+          </span>
+          <span className="breadcrumb-sep">
+            <ChevronRight size={12} />
+          </span>
+          <span className="breadcrumb-item current-section">
+            {sectionLabelMap[activeSection] || "Terminal"}
+          </span>
+        </div>
       </div>
 
-      {/* Right: Global Process Lifecycle & System Actions */}
-      <div className="top-bar-right">
-        <button className="btn-top-action primary" onClick={onRunAll} title="Run all workspace targets">
+      {/* 2. Center: Global Process Batch Lifecycle Controls */}
+      <div className="top-bar-center">
+        <button
+          className="btn-top-action primary"
+          onClick={onRunAll}
+          title="Run all discovered workspace targets"
+        >
           <Play size={12} fill="currentColor" />
           <span>Run All</span>
         </button>
 
-        <button className="btn-top-action" onClick={onReloadAll} title="Hot reload all active target sessions">
+        <button
+          className="btn-top-action"
+          onClick={onReloadAll}
+          title="Hot reload all active running sessions"
+        >
           <Zap size={12} color="#f59e0b" />
           <span>Reload</span>
         </button>
 
-        <button className="btn-top-action" onClick={onRestartAll} title="Restart all active apps">
+        <button
+          className="btn-top-action"
+          onClick={onRestartAll}
+          title="Restart all active apps"
+        >
           <RotateCw size={12} color="#06b6d4" />
           <span>Restart</span>
         </button>
 
-        <button className="btn-top-action danger" onClick={onStopAll} title="Stop all running targets">
+        <button
+          className="btn-top-action danger"
+          onClick={onStopAll}
+          title="Stop all running processes"
+        >
           <Square size={12} fill="currentColor" />
           <span>Stop All</span>
+        </button>
+      </div>
+
+      {/* 3. Right: System & Tool Status Pills */}
+      <div className="top-bar-right">
+        {/* Device Status Pill */}
+        <button
+          className={`top-status-pill ${activeSection === "devices" ? "active" : ""}`}
+          onClick={() => onSelectSection("devices")}
+          title="View Connected Devices & AVD Launcher"
+        >
+          <Smartphone size={12} color="#38bdf8" />
+          <span>{onlineDevicesCount} Device{onlineDevicesCount === 1 ? "" : "s"}</span>
+          <span className={`pulse-dot ${onlineDevicesCount > 0 ? "green" : "yellow"}`} />
+        </button>
+
+        {/* Doctor Status Pill */}
+        <button
+          className={`top-status-pill ${activeSection === "doctor" ? "active" : ""}`}
+          onClick={() => onSelectSection("doctor")}
+          title="View Toolchain Health Diagnostics"
+        >
+          <Activity size={12} color="#10b981" />
+          <span>Doctor</span>
         </button>
 
         <div className="top-bar-divider" />
 
+        {/* Settings Action */}
         <button
-          className="btn-top-action glass-btn"
-          onClick={onInstallCli}
-          title="Install / Link 'devflow' CLI into system PATH (/usr/local/bin)"
+          className="btn-icon-top"
+          onClick={onOpenSettings}
+          title="DevFlow Preferences & CLI Setup"
         >
-          <Terminal size={12} color="#a855f7" />
-          <span>Shell CLI</span>
+          <Settings size={14} />
         </button>
       </div>
     </header>

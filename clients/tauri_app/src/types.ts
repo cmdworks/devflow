@@ -39,8 +39,11 @@ export interface WorkspaceResponse {
   active_sessions: ActiveSessionInfo[];
 }
 
+export type ViewSection = "overview" | "targets" | "terminal" | "devices" | "doctor" | "settings";
+
 export interface KnownWorkspace {
   name: string;
+  custom_name?: string;
   path: string;
   platform: string;
   framework: string;

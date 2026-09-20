@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { TopBar } from "./components/TopBar";
-import { Sidebar, type ViewMode } from "./components/Sidebar";
+import { PrimarySidebar } from "./components/PrimarySidebar";
+import { SecondarySidebar } from "./components/SecondarySidebar";
+import { TerminalSecondaryBar, type LayoutMode } from "./components/TerminalSecondaryBar";
 import { TerminalGrid } from "./components/TerminalGrid";
-import { WorkspaceTabBar, type LayoutMode } from "./components/WorkspaceTabBar";
+import { WorkspaceOverviewView } from "./components/WorkspaceOverviewView";
+import { TargetsView } from "./components/TargetsView";
 import { DevicesView } from "./components/DevicesView";
 import { DoctorView } from "./components/DoctorView";
-import { TargetsView } from "./components/TargetsView";
 import { WorkspaceModal } from "./components/WorkspaceModal";
+import { SettingsModal } from "./components/SettingsModal";
 import { useDevFlowApi } from "./hooks/useDevFlowApi";
 import { useDevFlowEvents } from "./hooks/useDevFlowEvents";
 import type {
@@ -18,6 +21,7 @@ import type {
   DoctorReport,
   ServerEvent,
   KnownWorkspace,
+  ViewSection,
 } from "./types";
 
 interface WorkspaceCacheItem {
@@ -25,13 +29,24 @@ interface WorkspaceCacheItem {
   openPanes: PaneInfo[];
   activePaneId: string;
   logsByPaneId: Record<string, LogEntry[]>;
+  activeSection: ViewSection;
 }
 
 export const App: React.FC = () => {
   const api = useDevFlowApi();
 
   // Navigation View State
-  const [activeView, setActiveView] = useState<ViewMode>("terminal");
+  const [activeSection, setActiveSection] = useState<ViewSection>("terminal");
+  const [isSubsidebarCollapsed, setIsSubsidebarCollapsed] = useState<boolean>(false);
+
+  // Custom Workspace Names (persisted)
+  const [customNames, setCustomNames] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("devflow_custom_workspace_names") || "{}");
+    } catch {
+      return {};
+    }
+  });
 
   // Workspace & Environment State
   const [workspaceName, setWorkspaceName] = useState<string>("Workspace");
@@ -54,8 +69,9 @@ export const App: React.FC = () => {
   const [doctorReport, setDoctorReport] = useState<DoctorReport | null>(null);
   const [isDoctorLoading, setIsDoctorLoading] = useState<boolean>(false);
 
-  // Modal State
+  // Modal States
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState<boolean>(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
 
   // In-Memory Stateful Workspace Cache (Zero-flicker 0ms switching)
   const workspaceCacheRef = useRef<Record<string, WorkspaceCacheItem>>({});
@@ -64,17 +80,25 @@ export const App: React.FC = () => {
     localStorage.setItem("devflow_layout_mode", layoutMode);
   }, [layoutMode]);
 
+  useEffect(() => {
+    localStorage.setItem("devflow_custom_workspace_names", JSON.stringify(customNames));
+  }, [customNames]);
+
   // Load known workspaces once at startup
   const loadKnownWorkspaces = useCallback(async () => {
     try {
       const list = await api.fetchWorkspaces();
       if (list && Array.isArray(list)) {
-        setKnownWorkspaces(list);
+        const enriched = list.map((w) => ({
+          ...w,
+          custom_name: customNames[w.path] || w.name,
+        }));
+        setKnownWorkspaces(enriched);
       }
     } catch (err) {
       console.error("Failed to load known workspaces:", err);
     }
-  }, [api]);
+  }, [api, customNames]);
 
   useEffect(() => {
     loadKnownWorkspaces();
@@ -213,8 +237,9 @@ export const App: React.FC = () => {
       try {
         const data = await api.fetchWorkspace(dirPath);
         const resolvedPath = data.workspace_path;
+        const displayName = customNames[resolvedPath] || data.workspace_name;
 
-        setWorkspaceName(data.workspace_name);
+        setWorkspaceName(displayName);
         setWorkspacePath(resolvedPath);
         setTargets(data.targets || []);
         setDevices(data.devices || []);
@@ -226,13 +251,14 @@ export const App: React.FC = () => {
           if (exists) {
             return prev.map((w) =>
               w.path === resolvedPath
-                ? { ...w, last_opened: new Date().toISOString() }
+                ? { ...w, last_opened: new Date().toISOString(), custom_name: displayName }
                 : w
             );
           }
           return [
             {
               name: data.workspace_name,
+              custom_name: displayName,
               path: resolvedPath,
               platform: data.targets?.[0]?.platform || "desktop",
               framework: data.targets?.[0]?.framework || "generic",
@@ -242,8 +268,8 @@ export const App: React.FC = () => {
           ];
         });
 
-        // Initialize target tabs
-        if (data.targets && data.targets.length > 0) {
+        // Initialize target tabs if no panes exist yet
+        if (data.targets && data.targets.length > 0 && openPanes.length === 0) {
           const targetPanes: PaneInfo[] = data.targets.map((t) => ({
             id: `pane-${t.id}`,
             targetId: t.id,
@@ -272,7 +298,7 @@ export const App: React.FC = () => {
         console.error("Failed to load workspace:", err);
       }
     },
-    [api]
+    [api, customNames, openPanes.length]
   );
 
   // Initial load from URL query
@@ -292,6 +318,7 @@ export const App: React.FC = () => {
           openPanes,
           activePaneId,
           logsByPaneId,
+          activeSection,
         };
       }
 
@@ -302,6 +329,7 @@ export const App: React.FC = () => {
         setOpenPanes(cached.openPanes);
         setActivePaneId(cached.activePaneId);
         setLogsByPaneId(cached.logsByPaneId);
+        setActiveSection(cached.activeSection || "terminal");
       }
 
       // 3. Update URL without page reload
@@ -314,32 +342,35 @@ export const App: React.FC = () => {
       // 4. Background refresh workspace targets and devices
       loadWorkspace(newPath);
     },
-    [workspacePath, targets, openPanes, activePaneId, logsByPaneId, loadWorkspace]
+    [workspacePath, targets, openPanes, activePaneId, logsByPaneId, activeSection, loadWorkspace]
   );
 
-  // Browse folder using native OS dialog
-  const handleBrowseWorkspace = async () => {
-    try {
-      const res = await api.pickFolder();
-      if (res.success && res.path) {
-        handleSwitchWorkspace(res.path);
-      }
-    } catch (err) {
-      console.error("Browse workspace error:", err);
+  // Rename Workspace Alias
+  const handleRenameWorkspace = useCallback((path: string, newName: string) => {
+    setCustomNames((prev) => {
+      const updated = { ...prev, [path]: newName };
+      return updated;
+    });
+    setKnownWorkspaces((prev) =>
+      prev.map((w) => (w.path === path ? { ...w, custom_name: newName } : w))
+    );
+    if (path === workspacePath) {
+      setWorkspaceName(newName);
     }
-  };
+  }, [workspacePath]);
 
-  // Paste directory from clipboard
-  const handlePasteWorkspace = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text && text.trim()) {
-        handleSwitchWorkspace(text.trim());
+  // Remove Workspace from List
+  const handleRemoveWorkspace = useCallback(
+    async (path: string) => {
+      try {
+        await api.removeWorkspace(path);
+        setKnownWorkspaces((prev) => prev.filter((w) => w.path !== path));
+      } catch (err) {
+        console.error("Failed to remove workspace:", err);
       }
-    } catch (err) {
-      console.warn("Clipboard paste unavailable:", err);
-    }
-  };
+    },
+    [api]
+  );
 
   // Run / Stop target toggle
   const handleToggleRun = async (targetId: string) => {
@@ -436,15 +467,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleInstallCli = async () => {
-    const res = await api.installShellCli();
-    if (res.success) {
-      alert(`✓ ${res.message || "Successfully installed 'devflow' command symlink!"}`);
-    } else {
-      alert(`✗ ${res.error || "Failed to install symlink."}`);
-    }
-  };
-
   const handleClosePane = (paneId: string) => {
     setOpenPanes((prev) => {
       const filtered = prev.filter((p) => p.id !== paneId);
@@ -453,110 +475,147 @@ export const App: React.FC = () => {
       }
       return filtered;
     });
-    if (maximizedPaneId === paneId) {
-      setMaximizedPaneId(null);
+  };
+
+  const handleClearActiveLogs = () => {
+    if (activePaneId) {
+      setLogsByPaneId((prev) => ({
+        ...prev,
+        [activePaneId]: [],
+      }));
     }
   };
 
-  const handleClearLogs = (paneId: string) => {
-    setLogsByPaneId((prev) => ({
-      ...prev,
-      [paneId]: [],
-    }));
+  const handleToggleMaximize = () => {
+    setMaximizedPaneId((prev) => (prev ? null : activePaneId));
   };
 
-  const handleOpenAllPanes = () => {
-    for (const t of targets) {
-      openTargetPane(t);
+  const handleBootEmulator = async (name: string) => {
+    try {
+      const res = await api.bootEmulator(name);
+      if (res.success) {
+        alert(`✓ ${res.message || `Booting emulator '${name}'...`}`);
+        const devs = await api.fetchDevices();
+        setDevices(devs);
+      } else {
+        alert(`✗ ${res.error || "Failed to boot emulator."}`);
+      }
+    } catch (e) {
+      console.error("Boot emulator error:", e);
     }
   };
 
   return (
     <div className="app-container">
-      {/* Slim Modern TopBar */}
+      {/* 1. Global Top Bar */}
       <TopBar
-        activeView={activeView}
-        onSelectView={setActiveView}
+        workspaceName={workspaceName}
+        activeSection={activeSection}
+        devices={devices}
+        onSelectSection={setActiveSection}
         onRunAll={handleRunAll}
         onReloadAll={handleReloadAll}
         onRestartAll={handleRestartAll}
         onStopAll={handleStopAll}
-        onInstallCli={handleInstallCli}
+        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
       <div className="main-body">
-        {/* Pinned Sidebar Workspace Hub & Navigation */}
-        <Sidebar
+        {/* 2. Primary Sidebar (Workspaces + Global Tools) */}
+        <PrimarySidebar
+          activeWorkspacePath={workspacePath}
+          knownWorkspaces={knownWorkspaces}
+          activeSection={activeSection}
+          devices={devices}
+          onSelectWorkspace={handleSwitchWorkspace}
+          onAddWorkspace={() => setIsWorkspaceModalOpen(true)}
+          onSelectSection={setActiveSection}
+          onRenameWorkspace={handleRenameWorkspace}
+          onRemoveWorkspace={handleRemoveWorkspace}
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+        />
+
+        {/* 3. Secondary Sidebar (Active Workspace Sub-Navigation) */}
+        <SecondarySidebar
           workspaceName={workspaceName}
           workspacePath={workspacePath}
-          knownWorkspaces={knownWorkspaces}
-          activeView={activeView}
+          activeSection={activeSection}
           targets={targets}
-          devices={devices}
           openPanes={openPanes}
-          onSelectView={setActiveView}
-          onSelectWorkspace={handleSwitchWorkspace}
-          onBrowseWorkspace={handleBrowseWorkspace}
-          onPasteWorkspace={handlePasteWorkspace}
-          onOpenWorkspaceManager={() => setIsWorkspaceModalOpen(true)}
+          activeSessions={activeSessions}
+          isCollapsed={isSubsidebarCollapsed}
+          onToggleCollapse={() => setIsSubsidebarCollapsed(!isSubsidebarCollapsed)}
+          onSelectSection={setActiveSection}
           onOpenTargetPane={openTargetPane}
           onOpenCombinedPane={openCombinedPane}
         />
 
-        {/* Dynamic Viewport Manager */}
+        {/* 4. Main Viewport */}
         <main className="viewport">
-          {activeView === "terminal" && (
+          {/* Terminal Mode with Secondary Top Bar */}
+          {activeSection === "terminal" && (
             <>
-              <WorkspaceTabBar
+              <TerminalSecondaryBar
                 panes={openPanes}
                 activePaneId={activePaneId}
                 layoutMode={layoutMode}
                 availableTargets={targets}
-                onSelectTab={(id) => {
-                  setActivePaneId(id);
-                  setMaximizedPaneId(null);
-                }}
-                onCloseTab={handleClosePane}
-                onChangeLayoutMode={(mode) => {
-                  setLayoutMode(mode);
-                  setMaximizedPaneId(null);
-                }}
-                onOpenTarget={openTargetPane}
-                onOpenCombinedStream={openCombinedPane}
+                isMaximized={!!maximizedPaneId}
+                onSelectTab={setActivePaneId}
+                onClosePane={handleClosePane}
+                onOpenTargetPane={openTargetPane}
+                onOpenCombinedPane={openCombinedPane}
+                onChangeLayout={setLayoutMode}
+                onToggleMaximize={handleToggleMaximize}
+                onClearActiveLogs={handleClearActiveLogs}
               />
 
-              <TerminalGrid
-                panes={openPanes}
-                activePaneId={activePaneId}
-                maximizedPaneId={maximizedPaneId}
-                layoutMode={layoutMode}
-                logsByPaneId={logsByPaneId}
-                onFocusPane={(id) => setActivePaneId(id)}
-                onToggleRun={handleToggleRun}
-                onReload={handleReload}
-                onRestart={handleRestart}
-                onSplitRight={(id) => {
-                  setActivePaneId(id);
-                  setLayoutMode("split-h");
-                  setMaximizedPaneId(null);
-                }}
-                onSplitDown={(id) => {
-                  setActivePaneId(id);
-                  setLayoutMode("split-v");
-                  setMaximizedPaneId(null);
-                }}
-                onToggleMaximize={(id) => {
-                  setMaximizedPaneId((prev) => (prev === id ? null : id));
-                }}
-                onClearLogs={handleClearLogs}
-                onClosePane={handleClosePane}
-                onOpenAllPanes={handleOpenAllPanes}
-                onOpenCombinedPane={openCombinedPane}
-              />
+              <div className="terminal-workspace-area">
+                <TerminalGrid
+                  panes={openPanes}
+                  activePaneId={activePaneId}
+                  maximizedPaneId={maximizedPaneId}
+                  logsByPaneId={logsByPaneId}
+                  layoutMode={layoutMode}
+                  onFocusPane={setActivePaneId}
+                  onToggleRun={handleToggleRun}
+                  onReload={handleReload}
+                  onRestart={handleRestart}
+                  onSplitRight={() => setLayoutMode("split-h")}
+                  onSplitDown={() => setLayoutMode("split-v")}
+                  onToggleMaximize={(id) => setMaximizedPaneId(maximizedPaneId === id ? null : id)}
+                  onClearLogs={(id) => setLogsByPaneId((prev) => ({ ...prev, [id]: [] }))}
+                  onClosePane={handleClosePane}
+                  onOpenAllPanes={() => {}}
+                  onOpenCombinedPane={openCombinedPane}
+                />
+              </div>
             </>
           )}
 
-          {activeView === "targets" && (
+          {/* Overview Mode */}
+          {activeSection === "overview" && (
+            <WorkspaceOverviewView
+              workspaceName={workspaceName}
+              workspacePath={workspacePath}
+              targets={targets}
+              openPanes={openPanes}
+              activeSessions={activeSessions}
+              devices={devices}
+              onOpenTargetPane={openTargetPane}
+              onRunAll={handleRunAll}
+              onReloadAll={handleReloadAll}
+              onRestartAll={handleRestartAll}
+              onStopAll={handleStopAll}
+              onToggleRunTarget={handleToggleRun}
+              onReloadTarget={handleReload}
+              onRestartTarget={handleRestart}
+              onSwitchToTerminal={() => setActiveSection("terminal")}
+            />
+          )}
+
+          {/* Targets & Process Matrix Mode */}
+          {activeSection === "targets" && (
             <TargetsView
               targets={targets}
               openPanes={openPanes}
@@ -573,30 +632,25 @@ export const App: React.FC = () => {
               onStopAll={handleStopAll}
               onSwitchToTerminal={(paneId) => {
                 if (paneId) setActivePaneId(paneId);
-                setActiveView("terminal");
+                setActiveSection("terminal");
               }}
             />
           )}
 
-          {activeView === "devices" && (
+          {/* Devices & Emulators Hub */}
+          {activeSection === "devices" && (
             <DevicesView
               devices={devices}
               onRefreshDevices={async () => {
                 const devs = await api.fetchDevices();
                 setDevices(devs);
               }}
-              onBootEmulator={async (name) => {
-                const res = await api.bootEmulator(name);
-                if (res.success) {
-                  alert(`✓ ${res.message || "Emulator booted."}`);
-                } else {
-                  alert(`✗ ${res.error || "Failed to boot emulator."}`);
-                }
-              }}
+              onBootEmulator={handleBootEmulator}
             />
           )}
 
-          {activeView === "doctor" && (
+          {/* Doctor Diagnostics Hub */}
+          {activeSection === "doctor" && (
             <DoctorView
               report={doctorReport}
               isLoading={isDoctorLoading}
@@ -606,15 +660,30 @@ export const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Advanced Workspace Manager Modal */}
-      {isWorkspaceModalOpen && (
-        <WorkspaceModal
-          currentPath={workspacePath}
-          isOpen={isWorkspaceModalOpen}
-          onClose={() => setIsWorkspaceModalOpen(false)}
-          onSelectWorkspace={handleSwitchWorkspace}
-        />
-      )}
+      {/* 5. Workspace Add / Switch Modal */}
+      <WorkspaceModal
+        isOpen={isWorkspaceModalOpen}
+        onClose={() => setIsWorkspaceModalOpen(false)}
+        currentPath={workspacePath}
+        onSelectWorkspace={(path) => {
+          handleSwitchWorkspace(path);
+          setIsWorkspaceModalOpen(false);
+        }}
+      />
+
+      {/* 6. Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
+        onInstallCli={async () => {
+          const res = await api.installShellCli();
+          if (!res.success) throw new Error(res.error);
+        }}
+        onUninstallCli={async () => {
+          const res = await api.uninstallShellCli();
+          if (!res.success) throw new Error(res.error);
+        }}
+      />
     </div>
   );
 };
