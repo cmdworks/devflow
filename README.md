@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/logo.svg" alt="DevFlow Logo" width="130" />
+
 # DevFlow ⚡
 
 ### Native Desktop GUI Companion, Interactive Multi-Target TUI Hub & AI Agent MCP Control Plane

@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  Layers,
   Play,
   Zap,
   RotateCw,
@@ -97,7 +96,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
 
         <div className="app-brand" onClick={() => onSelectSection("overview")} style={{ cursor: "pointer" }}>
-          <Layers size={16} color="#06b6d4" />
+          <img src="/logo.svg" alt="DevFlow Logo" style={{ width: "18px", height: "18px", objectFit: "contain" }} />
           <span className="brand-name">DevFlow</span>
           <span className="brand-badge">PRO</span>
         </div>
