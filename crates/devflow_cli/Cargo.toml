@@ -16,3 +16,4 @@ tokio = { workspace = true }
 colored = { workspace = true }
 anyhow = { workspace = true }
 open = { workspace = true }
+dirs = { workspace = true }

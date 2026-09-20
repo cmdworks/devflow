@@ -197,12 +197,20 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 .layer(axum::middleware::from_fn(|req: axum::extract::Request, next: axum::middleware::Next| async move {
                     let method = req.method().clone();
                     let uri = req.uri().clone();
+                    let path = uri.path();
+                    let is_noisy_polling = path.starts_with("/api/mcp/logs")
+                        || path.starts_with("/api/mcp/sessions")
+                        || path.starts_with("/api/mcp/agents")
+                        || path == "/api/events"
+                        || path == "/api/devices";
                     let response = next.run(req).await;
                     let status = response.status();
                     if status.is_server_error() || status.is_client_error() {
                         warn!("HTTP {} {} -> {}", method, uri, status);
-                    } else {
+                    } else if !is_noisy_polling {
                         info!("HTTP {} {} -> {}", method, uri, status);
+                    } else {
+                        tracing::debug!("HTTP {} {} -> {}", method, uri, status);
                     }
                     response
                 }))

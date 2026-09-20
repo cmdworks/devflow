@@ -257,12 +257,18 @@ export const McpView: React.FC<McpViewProps> = ({
   }, [loadLogs]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    const handlePoll = () => {
+      if (document.hidden) return;
       loadLogs(true);
       loadSessions();
       loadAgents();
-    }, 3500);
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(handlePoll, 5000);
+    window.addEventListener("focus", handlePoll);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", handlePoll);
+    };
   }, [loadLogs, loadSessions, loadAgents]);
 
   const handleDeleteLog = async (e: React.MouseEvent, id: string) => {

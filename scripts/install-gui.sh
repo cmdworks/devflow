@@ -72,24 +72,99 @@ if ! curl -fSL --progress-bar "$DOWNLOAD_URL" -o "$TMP_DIR/devflow-gui.tar.gz"; 
     exit 1
 fi
 
-# 3. Extract and install binary
+# 3. Extract and install
 tar -xzf "$TMP_DIR/devflow-gui.tar.gz" -C "$TMP_DIR"
 
-if [ -f "$TMP_DIR/devflow-gui" ]; then
-    mv "$TMP_DIR/devflow-gui" "$INSTALL_DIR/devflow-gui"
-    chmod +x "$INSTALL_DIR/devflow-gui"
-    echo -e "${GREEN}✓ Installed Desktop GUI binary:${RESET} $INSTALL_DIR/devflow-gui"
-else
-    echo -e "${RED}✗ Error: Binary 'devflow-gui' not found in downloaded archive.${RESET}"
-    exit 1
-fi
-
-# 4. macOS Gatekeeper Quarantine Clearance (xattr -cr)
 if [ "$OS_NAME" = "macos" ]; then
+    # macOS: Install DevFlow.app to /Applications or ~/Applications
+    APP_TARGET="/Applications/DevFlow.app"
+    if [ ! -w "/Applications" ]; then
+        APP_TARGET="$HOME/Applications/DevFlow.app"
+        mkdir -p "$HOME/Applications"
+    fi
+
+    if [ -d "$TMP_DIR/DevFlow.app" ]; then
+        rm -rf "$APP_TARGET"
+        cp -R "$TMP_DIR/DevFlow.app" "$APP_TARGET"
+        echo -e "${GREEN}✓ Installed native macOS app:${RESET} $APP_TARGET"
+    elif [ -f "$TMP_DIR/devflow-gui" ]; then
+        # Fallback for raw binary archives: wrap into DevFlow.app
+        mkdir -p "$APP_TARGET/Contents/MacOS" "$APP_TARGET/Contents/Resources"
+        cp "$TMP_DIR/devflow-gui" "$APP_TARGET/Contents/MacOS/devflow-gui"
+        chmod +x "$APP_TARGET/Contents/MacOS/devflow-gui"
+        echo -e "${GREEN}✓ Installed native macOS app:${RESET} $APP_TARGET"
+    fi
+
+    # Clear macOS Gatekeeper Quarantine
     if command -v xattr >/dev/null 2>&1; then
-        xattr -cr "$INSTALL_DIR/devflow-gui" 2>/dev/null || true
+        xattr -cr "$APP_TARGET" 2>/dev/null || true
         echo -e "${GREEN}✓ macOS Gatekeeper quarantine flags cleared.${RESET}"
     fi
+
+    # Create CLI companion wrappers in INSTALL_DIR
+    cat << EOF > "$INSTALL_DIR/devflow-gui"
+#!/usr/bin/env bash
+TARGET_DIR="\${1:-\$PWD}"
+if [ "\$#" -eq 0 ] || [ "\$#" -eq 1 -a -d "\$1" ]; then
+    if [ -d "/Applications/DevFlow.app" ]; then
+        open -a "/Applications/DevFlow.app" --args "\$TARGET_DIR"
+    elif [ -d "\$HOME/Applications/DevFlow.app" ]; then
+        open -a "\$HOME/Applications/DevFlow.app" --args "\$TARGET_DIR"
+    else
+        "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+    fi
+else
+    "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+fi
+EOF
+    chmod +x "$INSTALL_DIR/devflow-gui"
+
+    cat << EOF > "$INSTALL_DIR/devflow"
+#!/usr/bin/env bash
+if [ "\$#" -eq 0 ]; then
+    exec "$INSTALL_DIR/devflow-gui"
+fi
+exec "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+EOF
+    chmod +x "$INSTALL_DIR/devflow"
+
+    echo -e "${GREEN}✓ Installed CLI wrappers:${RESET} $INSTALL_DIR/devflow, $INSTALL_DIR/devflow-gui"
+
+else
+    # Linux: Install binary, icon, and desktop entry
+    if [ -f "$TMP_DIR/devflow-gui" ]; then
+        mv "$TMP_DIR/devflow-gui" "$INSTALL_DIR/devflow-gui"
+        chmod +x "$INSTALL_DIR/devflow-gui"
+        ln -sf "$INSTALL_DIR/devflow-gui" "$INSTALL_DIR/devflow"
+        echo -e "${GREEN}✓ Installed Desktop GUI binary:${RESET} $INSTALL_DIR/devflow-gui"
+        echo -e "${GREEN}✓ Created CLI symlink:${RESET} $INSTALL_DIR/devflow"
+    fi
+
+    # Install Linux Desktop Entry & Icon
+    ICON_DIR="$HOME/.local/share/icons/hicolor/512x512/apps"
+    APPS_DIR="$HOME/.local/share/applications"
+    mkdir -p "$ICON_DIR" "$APPS_DIR"
+
+    if [ -f "$TMP_DIR/devflow.png" ]; then
+        cp "$TMP_DIR/devflow.png" "$ICON_DIR/devflow.png"
+    fi
+
+    cat << EOF > "$APPS_DIR/devflow.desktop"
+[Desktop Entry]
+Name=DevFlow
+Comment=Universal Framework-Aware Development Platform & MCP Hub
+Exec=$INSTALL_DIR/devflow-gui %U
+Icon=devflow
+Terminal=false
+Type=Application
+Categories=Development;IDE;
+StartupNotify=true
+EOF
+    chmod +x "$APPS_DIR/devflow.desktop"
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$APPS_DIR" 2>/dev/null || true
+    fi
+    echo -e "${GREEN}✓ Registered Linux desktop application:${RESET} $APPS_DIR/devflow.desktop"
 fi
 
 # 5. Verify PATH
@@ -102,7 +177,9 @@ else
     echo -e "${GREEN}✓ '$INSTALL_DIR' is active in your PATH.${RESET}"
 fi
 
-echo -e "${GREEN}${BOLD}🎉 DevFlow Desktop Companion successfully installed!${RESET}\n"
-echo -e "Launch GUI:"
-echo -e "  • ${CYAN}devflow-gui${RESET}          Start the native desktop app"
+echo -e "${GREEN}${BOLD}🎉 DevFlow Desktop successfully installed!${RESET}\n"
+echo -e "Usage:"
+echo -e "  • ${CYAN}DevFlow${RESET}              Launch via Spotlight / Launchpad / Applications"
+echo -e "  • ${CYAN}devflow-gui .${RESET}        Launch desktop GUI for current directory (detached)"
+echo -e "  • ${CYAN}devflow --help${RESET}       Run CLI commands & agent tools"
 echo ""

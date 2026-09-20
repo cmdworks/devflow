@@ -95,10 +95,48 @@ if [ -z "$REPO_ROOT" ] || [ "$1" = "--release" ] || [ "$1" = "--binary" ]; then
         echo -e "\n${CYAN}▶ Downloading DevFlow Desktop GUI Companion (${GUI_ASSET})...${RESET}"
         if curl -fSL --progress-bar "$GUI_URL" -o "$TMP_DIR/gui.tar.gz"; then
             tar -xzf "$TMP_DIR/gui.tar.gz" -C "$TMP_DIR"
-            if [ -f "$TMP_DIR/devflow-gui" ]; then
-                mv "$TMP_DIR/devflow-gui" "$INSTALL_DIR/devflow-gui"
+            if [ "$OS_NAME" = "macos" ]; then
+                APP_TARGET="/Applications/DevFlow.app"
+                if [ ! -w "/Applications" ]; then
+                    APP_TARGET="$HOME/Applications/DevFlow.app"
+                    mkdir -p "$HOME/Applications"
+                fi
+                if [ -d "$TMP_DIR/DevFlow.app" ]; then
+                    rm -rf "$APP_TARGET"
+                    cp -R "$TMP_DIR/DevFlow.app" "$APP_TARGET"
+                elif [ -f "$TMP_DIR/devflow-gui" ]; then
+                    mkdir -p "$APP_TARGET/Contents/MacOS" "$APP_TARGET/Contents/Resources"
+                    cp "$TMP_DIR/devflow-gui" "$APP_TARGET/Contents/MacOS/devflow-gui"
+                    chmod +x "$APP_TARGET/Contents/MacOS/devflow-gui"
+                fi
+                if command -v xattr >/dev/null 2>&1; then
+                    xattr -cr "$APP_TARGET" 2>/dev/null || true
+                fi
+                # Create CLI wrapper for devflow-gui
+                cat << EOF > "$INSTALL_DIR/devflow-gui"
+#!/usr/bin/env bash
+TARGET_DIR="\${1:-\$PWD}"
+if [ "\$#" -eq 0 ] || [ "\$#" -eq 1 -a -d "\$1" ]; then
+    if [ -d "/Applications/DevFlow.app" ]; then
+        open -a "/Applications/DevFlow.app" --args "\$TARGET_DIR"
+    elif [ -d "\$HOME/Applications/DevFlow.app" ]; then
+        open -a "\$HOME/Applications/DevFlow.app" --args "\$TARGET_DIR"
+    else
+        "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+    fi
+else
+    "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+fi
+EOF
                 chmod +x "$INSTALL_DIR/devflow-gui"
-                echo -e "${GREEN}✓ Installed Desktop GUI binary:${RESET} $INSTALL_DIR/devflow-gui"
+                echo -e "${GREEN}✓ Installed native macOS app:${RESET} $APP_TARGET"
+                echo -e "${GREEN}✓ Installed GUI CLI wrapper:${RESET} $INSTALL_DIR/devflow-gui"
+            else
+                if [ -f "$TMP_DIR/devflow-gui" ]; then
+                    mv "$TMP_DIR/devflow-gui" "$INSTALL_DIR/devflow-gui"
+                    chmod +x "$INSTALL_DIR/devflow-gui"
+                    echo -e "${GREEN}✓ Installed Desktop GUI binary:${RESET} $INSTALL_DIR/devflow-gui"
+                fi
             fi
         else
             echo -e "${YELLOW}⚠ GUI companion not available for this target or version.${RESET}"
@@ -132,7 +170,31 @@ else
         cargo build --release --manifest-path "$REPO_ROOT/clients/tauri_app/src-tauri/Cargo.toml"
         GUI_BIN="$REPO_ROOT/clients/tauri_app/src-tauri/target/release/devflow-desktop"
         if [ -f "$GUI_BIN" ]; then
-            ln -sf "$GUI_BIN" "$INSTALL_DIR/devflow-gui"
+            if [ "$OS_NAME" = "macos" ]; then
+                APP_TARGET="/Applications/DevFlow.app"
+                if [ ! -w "/Applications" ]; then
+                    APP_TARGET="$HOME/Applications/DevFlow.app"
+                    mkdir -p "$HOME/Applications"
+                fi
+                mkdir -p "$APP_TARGET/Contents/MacOS" "$APP_TARGET/Contents/Resources"
+                cp "$GUI_BIN" "$APP_TARGET/Contents/MacOS/devflow-gui"
+                chmod +x "$APP_TARGET/Contents/MacOS/devflow-gui"
+                cp "$REPO_ROOT/clients/tauri_app/src-tauri/icons/icon.icns" "$APP_TARGET/Contents/Resources/icon.icns" 2>/dev/null || true
+                cp "$REPO_ROOT/clients/tauri_app/src-tauri/icons/icon.png" "$APP_TARGET/Contents/Resources/icon.png" 2>/dev/null || true
+                cat << EOF > "$INSTALL_DIR/devflow-gui"
+#!/usr/bin/env bash
+TARGET_DIR="\${1:-\$PWD}"
+if [ "\$#" -eq 0 ] || [ "\$#" -eq 1 -a -d "\$1" ]; then
+    open -a "$APP_TARGET" --args "\$TARGET_DIR"
+else
+    "$APP_TARGET/Contents/MacOS/devflow-gui" "\$@"
+fi
+EOF
+                chmod +x "$INSTALL_DIR/devflow-gui"
+                echo -e "${GREEN}✓ Installed native macOS app:${RESET} $APP_TARGET"
+            else
+                ln -sf "$GUI_BIN" "$INSTALL_DIR/devflow-gui"
+            fi
             echo -e "${GREEN}✓ Linked GUI:${RESET} $INSTALL_DIR/devflow-gui -> $GUI_BIN"
         fi
     fi
@@ -146,6 +208,8 @@ if [ "$OS_NAME" = "macos" ]; then
     if command -v xattr >/dev/null 2>&1; then
         xattr -cr "$INSTALL_DIR/devflow" 2>/dev/null || true
         xattr -cr "$INSTALL_DIR/devflow-gui" 2>/dev/null || true
+        [ -d "/Applications/DevFlow.app" ] && xattr -cr "/Applications/DevFlow.app" 2>/dev/null || true
+        [ -d "$HOME/Applications/DevFlow.app" ] && xattr -cr "$HOME/Applications/DevFlow.app" 2>/dev/null || true
         echo -e "${GREEN}✓ Quarantine attributes cleared successfully.${RESET}"
     fi
 fi

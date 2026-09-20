@@ -384,6 +384,7 @@ dependencies = [
  "colored",
  "devflow_cli_core",
  "devflow_tui",
+ "dirs",
  "open",
  "tokio",
 ]
