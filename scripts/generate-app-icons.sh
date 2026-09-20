@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SVG_SRC="${REPO_ROOT}/assets/devflow-app-icon.svg"
+SVG_SRC="${REPO_ROOT}/assets/image/logo/app-icon.svg"
 ICONS_DIR="${REPO_ROOT}/clients/tauri_app/src-tauri/icons"
 TMP_DIR=$(mktemp -d)
 ICONSET_DIR="${TMP_DIR}/devflow.iconset"

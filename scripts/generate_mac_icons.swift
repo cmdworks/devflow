@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 
 let repoRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let iconSvgPath = repoRoot.appendingPathComponent("assets/devflow-icon.svg")
+let iconSvgPath = repoRoot.appendingPathComponent("assets/image/logo/icon.svg")
 let outputIconsDir = repoRoot.appendingPathComponent("clients/tauri_app/src-tauri/icons")
 let tmpDir = FileManager.default.temporaryDirectory.appendingPathComponent("devflow_icon_gen_\(UUID().uuidString)")
 let iconsetDir = tmpDir.appendingPathComponent("devflow.iconset")
