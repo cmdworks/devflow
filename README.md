@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="DevFlow Logo" width="130" />
+<img src="assets/image/logo/logo-tagline.svg" alt="DevFlow Logo" width="130" />
 
 # DevFlow ⚡
 
