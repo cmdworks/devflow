@@ -40,7 +40,9 @@ async fn main() -> anyhow::Result<()> {
             {
                 let app_candidates = [
                     std::path::PathBuf::from("/Applications/DevFlow.app"),
-                    dirs::home_dir().map(|h| h.join("Applications/DevFlow.app")).unwrap_or_default(),
+                    dirs::home_dir()
+                        .map(|h| h.join("Applications/DevFlow.app"))
+                        .unwrap_or_default(),
                 ];
                 for app_path in &app_candidates {
                     if app_path.exists() {
@@ -50,7 +52,11 @@ async fn main() -> anyhow::Result<()> {
                             .arg("--args")
                             .arg(&dir_str)
                             .spawn();
-                        println!("{} Launched DevFlow Desktop for '{}'", "⚡".cyan().bold(), dir_str.green());
+                        println!(
+                            "{} Launched DevFlow Desktop for '{}'",
+                            "⚡".cyan().bold(),
+                            dir_str.green()
+                        );
                         return Ok(());
                     }
                 }
@@ -58,7 +64,9 @@ async fn main() -> anyhow::Result<()> {
 
             // 2. Check for devflow-gui binary in PATH or standard local dirs
             let local_gui_candidates = [
-                dirs::home_dir().map(|h| h.join(".local/bin/devflow-gui")).unwrap_or_default(),
+                dirs::home_dir()
+                    .map(|h| h.join(".local/bin/devflow-gui"))
+                    .unwrap_or_default(),
                 std::path::PathBuf::from("/usr/local/bin/devflow-gui"),
             ];
 
@@ -70,7 +78,11 @@ async fn main() -> anyhow::Result<()> {
                         .stdout(std::process::Stdio::null())
                         .stderr(std::process::Stdio::null())
                         .spawn();
-                    println!("{} Launched DevFlow Desktop for '{}'", "⚡".cyan().bold(), dir_str.green());
+                    println!(
+                        "{} Launched DevFlow Desktop for '{}'",
+                        "⚡".cyan().bold(),
+                        dir_str.green()
+                    );
                     return Ok(());
                 }
             }
