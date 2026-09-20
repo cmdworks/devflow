@@ -15,8 +15,8 @@ pub struct PlatformRegistry;
 impl PlatformRegistry {
     pub fn get_runner(platform: Platform) -> Arc<dyn PlatformRunner> {
         match platform {
-            Platform::Android => Arc::new(AndroidPlatformRunner),
-            Platform::Apple | Platform::Ios | Platform::Macos => Arc::new(ApplePlatformRunner),
+            Platform::Android => Arc::new(AndroidPlatformRunner::new()),
+            Platform::Apple | Platform::Ios | Platform::Macos => Arc::new(ApplePlatformRunner::new()),
             Platform::Desktop | Platform::Generic => Arc::new(DesktopPlatformRunner::new()),
         }
     }

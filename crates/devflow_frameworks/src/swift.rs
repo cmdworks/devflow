@@ -141,6 +141,11 @@ impl FrameworkAdapter for SwiftFrameworkAdapter {
         self.desktop_runner.launch(&ctx.project_dir, &ctx.device, Some(bin_path)).await
     }
 
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping Swift application...");
+        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await
+    }
+
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
         let dev_ctx = DeviceContext {
             project_dir: ctx.project_dir.clone(),

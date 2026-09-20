@@ -36,6 +36,7 @@ pub trait FrameworkAdapter: Send + Sync {
     async fn build(&self, ctx: &BuildContext) -> Result<BuildResult>;
     async fn install(&self, ctx: &DeviceContext) -> Result<()>;
     async fn launch(&self, ctx: &DeviceContext) -> Result<()>;
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()>;
     async fn reload(&self, ctx: &ReloadContext) -> Result<()>;
     async fn restart(&self, ctx: &DeviceContext) -> Result<()>;
     async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>>;

@@ -50,31 +50,62 @@ export const DoctorModal: React.FC<DoctorModalProps> = ({ report, isLoading, onC
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#34d399" }}>
                   <CheckCircle size={14} />
-                  <span>{report.summary.passed} Passed</span>
+                  <span>{report.passed_count ?? report.summary?.passed ?? 0} Passed</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#fbbf24" }}>
                   <AlertTriangle size={14} />
-                  <span>{report.summary.warnings} Warnings</span>
+                  <span>{report.warning_count ?? report.summary?.warnings ?? 0} Warnings</span>
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "5px", color: "#f87171" }}>
                   <XCircle size={14} />
-                  <span>{report.summary.failed} Failed</span>
+                  <span>{report.failure_count ?? report.summary?.failed ?? 0} Failed</span>
                 </div>
               </div>
 
               {report.checks.map((c, i) => {
-                const statusClass = c.status.toLowerCase();
+                const rawStatus = (c.status || "pass").toLowerCase();
+                const isPass = rawStatus === "pass" || rawStatus === "passed";
+                const isWarn = rawStatus === "warn" || rawStatus === "warning";
+                const statusClass = isPass ? "pass" : isWarn ? "warn" : "fail";
+                const statusLabel = isPass ? "PASSED" : isWarn ? "WARNING" : "FAILED";
+
                 return (
                   <div key={i} className="doctor-card">
                     <div className="doctor-card-top">
-                      <span className="doctor-name">{c.name}</span>
-                      <span className={`doctor-status-pill ${statusClass}`}>{c.status}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span className="doctor-name">{c.name}</span>
+                        {c.category && (
+                          <span style={{ fontSize: "10px", opacity: 0.6 }}>({c.category})</span>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        {c.detected_version && (
+                          <span style={{ fontSize: "10px", opacity: 0.75, fontFamily: "monospace" }}>
+                            {c.detected_version}
+                          </span>
+                        )}
+                        <span className={`doctor-status-pill ${statusClass}`}>{statusLabel}</span>
+                      </div>
                     </div>
                     <div className="doctor-msg">{c.message}</div>
                     {c.details && <div className="doctor-msg" style={{ opacity: 0.8 }}>{c.details}</div>}
                     {c.fix_hint && (
-                      <div className="doctor-hint">
-                        💡 <strong>Fix:</strong> {c.fix_hint}
+                      <div className="doctor-hint" style={{ marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span>💡 <strong>Fix:</strong> <code>{c.fix_hint}</code></span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(c.fix_hint || "")}
+                          style={{
+                            background: "rgba(255, 255, 255, 0.08)",
+                            border: "none",
+                            color: "var(--text-primary)",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          Copy
+                        </button>
                       </div>
                     )}
                   </div>

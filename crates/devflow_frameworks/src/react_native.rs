@@ -19,8 +19,8 @@ pub struct ReactNativeFrameworkAdapter {
 impl ReactNativeFrameworkAdapter {
     pub fn new() -> Self {
         Self {
-            android_runner: Arc::new(AndroidPlatformRunner),
-            apple_runner: Arc::new(ApplePlatformRunner),
+            android_runner: Arc::new(AndroidPlatformRunner::new()),
+            apple_runner: Arc::new(ApplePlatformRunner::new()),
             desktop_runner: Arc::new(DesktopPlatformRunner::new()),
         }
     }
@@ -117,6 +117,15 @@ impl FrameworkAdapter for ReactNativeFrameworkAdapter {
             Platform::Android => self.android_runner.launch(&ctx.project_dir, &ctx.device, Some(package_id)).await,
             Platform::Apple | Platform::Ios => self.apple_runner.launch(&ctx.project_dir, &ctx.device, Some(package_id)).await,
             _ => self.desktop_runner.launch(&ctx.project_dir, &ctx.device, None).await,
+        }
+    }
+
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping React Native application on device {} ({})", ctx.device.id, ctx.device.platform);
+        match ctx.device.platform {
+            Platform::Android => self.android_runner.stop(&ctx.project_dir, &ctx.device).await,
+            Platform::Apple | Platform::Ios => self.apple_runner.stop(&ctx.project_dir, &ctx.device).await,
+            _ => self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await,
         }
     }
 

@@ -1,7 +1,7 @@
 import React from "react";
 import { FolderPlus, Radio } from "lucide-react";
 import { TermaxTerminalPane } from "./TermaxTerminalPane";
-import type { LayoutMode } from "./WorkspaceTabBar";
+import type { LayoutMode } from "./TerminalSecondaryBar";
 import type { PaneInfo, LogEntry } from "../types";
 
 interface TerminalGridProps {
@@ -10,6 +10,9 @@ interface TerminalGridProps {
   maximizedPaneId: string | null;
   layoutMode: LayoutMode;
   logsByPaneId: Record<string, LogEntry[]>;
+  levelFilter?: string;
+  tagFilter?: string;
+  searchQuery?: string;
   onFocusPane: (paneId: string) => void;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
@@ -29,15 +32,10 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
   maximizedPaneId,
   layoutMode,
   logsByPaneId,
+  levelFilter = "ALL",
+  tagFilter = "",
+  searchQuery = "",
   onFocusPane,
-  onToggleRun,
-  onReload,
-  onRestart,
-  onSplitRight,
-  onSplitDown,
-  onToggleMaximize,
-  onClearLogs,
-  onClosePane,
   onOpenAllPanes,
   onOpenCombinedPane,
 }) => {
@@ -74,15 +72,10 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
             logs={logsByPaneId[maxPane.id] || []}
             isActive={true}
             isMaximized={true}
+            levelFilter={levelFilter}
+            tagFilter={tagFilter}
+            searchQuery={searchQuery}
             onFocusPane={onFocusPane}
-            onToggleRun={onToggleRun}
-            onReload={onReload}
-            onRestart={onRestart}
-            onSplitRight={onSplitRight}
-            onSplitDown={onSplitDown}
-            onToggleMaximize={onToggleMaximize}
-            onClearLogs={onClearLogs}
-            onClose={onClosePane}
           />
         </div>
       );
@@ -101,15 +94,10 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
             logs={logsByPaneId[currentPane.id] || []}
             isActive={true}
             isMaximized={false}
+            levelFilter={levelFilter}
+            tagFilter={tagFilter}
+            searchQuery={searchQuery}
             onFocusPane={onFocusPane}
-            onToggleRun={onToggleRun}
-            onReload={onReload}
-            onRestart={onRestart}
-            onSplitRight={onSplitRight}
-            onSplitDown={onSplitDown}
-            onToggleMaximize={onToggleMaximize}
-            onClearLogs={onClearLogs}
-            onClose={onClosePane}
           />
         </div>
       );
@@ -133,15 +121,10 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
           logs={logsByPaneId[pane.id] || []}
           isActive={pane.id === activePaneId}
           isMaximized={false}
+          levelFilter={levelFilter}
+          tagFilter={tagFilter}
+          searchQuery={searchQuery}
           onFocusPane={onFocusPane}
-          onToggleRun={onToggleRun}
-          onReload={onReload}
-          onRestart={onRestart}
-          onSplitRight={onSplitRight}
-          onSplitDown={onSplitDown}
-          onToggleMaximize={onToggleMaximize}
-          onClearLogs={onClearLogs}
-          onClose={onClosePane}
         />
       ))}
     </div>

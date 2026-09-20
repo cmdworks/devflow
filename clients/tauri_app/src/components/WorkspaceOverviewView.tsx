@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  FolderGit2,
   Copy,
   Check,
   Play,
@@ -11,6 +10,8 @@ import {
   FolderOpen,
   Layers,
   Smartphone,
+  Loader2,
+  Sliders,
 } from "lucide-react";
 import type { ProjectTarget, PaneInfo, ActiveSessionInfo, Device } from "../types";
 
@@ -21,6 +22,10 @@ interface WorkspaceOverviewViewProps {
   openPanes: PaneInfo[];
   activeSessions: ActiveSessionInfo[];
   devices: Device[];
+  isStartingAll?: boolean;
+  isStoppingAll?: boolean;
+  allTargetsRunning?: boolean;
+  anyTargetRunning?: boolean;
   onOpenTargetPane: (target: ProjectTarget) => void;
   onRunAll: () => void;
   onReloadAll: () => void;
@@ -29,7 +34,9 @@ interface WorkspaceOverviewViewProps {
   onToggleRunTarget: (targetId: string) => void;
   onReloadTarget: (targetId: string) => void;
   onRestartTarget: (targetId: string) => void;
+  onOpenDevOptions?: (targetId?: string) => void;
   onSwitchToTerminal: () => void;
+  onSwitchToTargets?: () => void;
 }
 
 export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
@@ -37,8 +44,12 @@ export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
   workspacePath,
   targets,
   openPanes,
-  activeSessions,
+  activeSessions: _activeSessions,
   devices,
+  isStartingAll = false,
+  isStoppingAll = false,
+  allTargetsRunning = false,
+  anyTargetRunning = false,
   onOpenTargetPane,
   onRunAll,
   onReloadAll,
@@ -47,40 +58,49 @@ export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
   onToggleRunTarget,
   onReloadTarget,
   onRestartTarget,
+  onOpenDevOptions,
   onSwitchToTerminal,
+  onSwitchToTargets,
 }) => {
-  const [copiedPath, setCopiedPath] = useState(false);
+  const [copiedPath, setCopiedPath] = useState<boolean>(false);
 
   const handleCopyPath = async () => {
     try {
       await navigator.clipboard.writeText(workspacePath);
       setCopiedPath(true);
       setTimeout(() => setCopiedPath(false), 2000);
-    } catch {
-      // ignore
-    }
+    } catch (_) {}
   };
 
-  const runningCount = activeSessions.length;
+  const runningCount = openPanes.filter(
+    (p) => !p.isCombined && (p.status === "running" || p.status === "building")
+  ).length;
   const onlineDevicesCount = devices.filter((d) => d.online || d.state === "device" || d.state === "booted").length;
 
   return (
-    <div className="view-container">
-      {/* 1. Hero Summary Card */}
+    <div className="overview-view-wrapper">
+      {/* 1. Header Banner & Workspace Identity */}
       <div className="overview-hero-card">
         <div className="overview-hero-left">
-          <div className="overview-icon-box">
-            <FolderGit2 size={24} color="#06b6d4" />
+          <div className="overview-avatar-icon">
+            <Layers size={22} color="#06b6d4" />
           </div>
-          <div>
+          <div className="overview-hero-meta">
             <div className="overview-title-row">
-              <h1 className="overview-title">{workspaceName}</h1>
-              <span className="overview-badge">Active Workspace</span>
+              <h2 className="overview-title">{workspaceName}</h2>
+              <span className="overview-badge-platform">
+                {targets[0]?.platform || "Universal"}
+              </span>
+              <span className="overview-badge-targets">
+                {targets.length} Target{targets.length === 1 ? "" : "s"}
+              </span>
             </div>
             <div className="overview-path-row">
-              <span className="overview-path-text">{workspacePath}</span>
+              <span className="overview-path-text" title={workspacePath}>
+                {workspacePath}
+              </span>
               <button
-                className="btn-path-copy-small"
+                className="btn-overview-copy"
                 onClick={handleCopyPath}
                 title="Copy full directory path"
               >
@@ -93,47 +113,97 @@ export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
 
         {/* Global Batch Process Actions */}
         <div className="overview-hero-actions">
-          <button className="btn-hero-action primary" onClick={onRunAll}>
-            <Play size={13} fill="currentColor" />
-            <span>Run All</span>
+          <button
+            className={`btn-hero-action primary ${isStartingAll ? "loading" : ""}`}
+            onClick={onRunAll}
+            disabled={isStartingAll || allTargetsRunning || targets.length === 0}
+            title={
+              isStartingAll
+                ? "Starting workspace targets..."
+                : allTargetsRunning
+                ? "All targets are already running"
+                : targets.length === 0
+                ? "No targets found in workspace"
+                : "Run all workspace targets"
+            }
+          >
+            {isStartingAll ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Play size={13} fill="currentColor" />
+            )}
+            <span>{isStartingAll ? "Starting..." : "Run All"}</span>
           </button>
 
-          <button className="btn-hero-action" onClick={onReloadAll}>
-            <Zap size={13} color="#f59e0b" />
+          <button
+            className="btn-hero-action"
+            onClick={onReloadAll}
+            disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+            title={anyTargetRunning ? "Hot reload all active running sessions" : "No active sessions to reload"}
+          >
+            <Zap size={13} color={anyTargetRunning ? "#f59e0b" : "var(--text-muted)"} />
             <span>Reload</span>
           </button>
 
-          <button className="btn-hero-action" onClick={onRestartAll}>
-            <RotateCw size={13} color="#06b6d4" />
+          <button
+            className="btn-hero-action"
+            onClick={onRestartAll}
+            disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+            title={anyTargetRunning ? "Restart all active apps" : "No active sessions to restart"}
+          >
+            <RotateCw size={13} color={anyTargetRunning ? "#06b6d4" : "var(--text-muted)"} />
             <span>Restart</span>
           </button>
 
-          <button className="btn-hero-action danger" onClick={onStopAll}>
-            <Square size={13} fill="currentColor" />
-            <span>Stop All</span>
+          <button
+            className={`btn-hero-action danger ${isStoppingAll ? "loading" : ""}`}
+            onClick={onStopAll}
+            disabled={isStoppingAll || !anyTargetRunning}
+            title={
+              isStoppingAll
+                ? "Stopping running processes..."
+                : !anyTargetRunning
+                ? "No running processes to stop"
+                : "Stop all running processes"
+            }
+          >
+            {isStoppingAll ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Square size={13} fill="currentColor" />
+            )}
+            <span>{isStoppingAll ? "Stopping..." : "Stop All"}</span>
           </button>
         </div>
       </div>
 
       {/* 2. Quick Stat Counters */}
       <div className="overview-stats-grid">
-        <div className="stat-card" onClick={onSwitchToTerminal} style={{ cursor: "pointer" }}>
+        <div
+          className="stat-card"
+          onClick={onSwitchToTargets || onSwitchToTerminal}
+          style={{ cursor: "pointer" }}
+        >
           <div className="stat-label">Discovered Targets</div>
           <div className="stat-value">{targets.length}</div>
           <div className="stat-meta">
             <Layers size={12} color="#06b6d4" />
-            <span>Click to view terminal tabs</span>
+            <span>Click to view targets matrix</span>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          onClick={onSwitchToTerminal}
+          style={{ cursor: "pointer" }}
+        >
           <div className="stat-label">Active Processes</div>
           <div className="stat-value" style={{ color: runningCount > 0 ? "#10b981" : "inherit" }}>
             {runningCount}
           </div>
           <div className="stat-meta">
             <span className={`pulse-dot ${runningCount > 0 ? "green" : "gray"}`} />
-            <span>{runningCount > 0 ? "Running in background" : "All idle"}</span>
+            <span>{runningCount > 0 ? "Running in background (view logs)" : "All idle"}</span>
           </div>
         </div>
 
@@ -246,6 +316,17 @@ export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
                     <RotateCw size={12} color="#06b6d4" />
                     <span>Restart</span>
                   </button>
+
+                  {onOpenDevOptions && (
+                    <button
+                      className="btn-target-subaction"
+                      onClick={() => onOpenDevOptions(target.id)}
+                      title="Runner & Dev Server Options"
+                    >
+                      <Sliders size={12} color="#38bdf8" />
+                      <span>Options</span>
+                    </button>
+                  )}
 
                   <button
                     className="btn-target-subaction primary-link"

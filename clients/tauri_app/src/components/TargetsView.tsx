@@ -7,6 +7,8 @@ import {
   RotateCw,
   Terminal,
   Layers,
+  Loader2,
+  Sliders,
 } from "lucide-react";
 import type { ProjectTarget, PaneInfo, ActiveSessionInfo } from "../types";
 
@@ -16,6 +18,10 @@ interface TargetsViewProps {
   activeSessions: ActiveSessionInfo[];
   workspaceName: string;
   workspacePath: string;
+  isStartingAll?: boolean;
+  isStoppingAll?: boolean;
+  allTargetsRunning?: boolean;
+  anyTargetRunning?: boolean;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
   onRestart: (targetId: string) => void;
@@ -24,6 +30,7 @@ interface TargetsViewProps {
   onReloadAll: () => void;
   onRestartAll: () => void;
   onStopAll: () => void;
+  onOpenDevOptions?: (targetId?: string) => void;
   onSwitchToTerminal: (paneId?: string) => void;
 }
 
@@ -33,6 +40,10 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   activeSessions,
   workspaceName,
   workspacePath,
+  isStartingAll = false,
+  isStoppingAll = false,
+  allTargetsRunning = false,
+  anyTargetRunning = false,
   onToggleRun,
   onReload,
   onRestart,
@@ -41,11 +52,12 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   onReloadAll,
   onRestartAll,
   onStopAll,
+  onOpenDevOptions,
   onSwitchToTerminal,
 }) => {
   return (
     <div className="view-container">
-      {/* Header Banner */}
+      {/* 1. Header & Batch Actions */}
       <div className="view-header">
         <div>
           <div className="view-title-group">
@@ -59,25 +71,78 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
         </div>
 
         <div className="view-actions">
-          <button className="btn-primary" onClick={onRunAll} title="Run all targets in parallel">
-            <Play size={13} fill="currentColor" />
-            <span>Run All</span>
+          <button
+            className={`btn-primary ${isStartingAll ? "loading" : ""}`}
+            onClick={onRunAll}
+            disabled={isStartingAll || allTargetsRunning || targets.length === 0}
+            title={
+              isStartingAll
+                ? "Starting workspace targets..."
+                : allTargetsRunning
+                ? "All targets are already running"
+                : targets.length === 0
+                ? "No targets found in workspace"
+                : "Run all targets in parallel"
+            }
+          >
+            {isStartingAll ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Play size={13} fill="currentColor" />
+            )}
+            <span>{isStartingAll ? "Starting..." : "Run All"}</span>
           </button>
 
-          <button className="btn-glass" onClick={onReloadAll} title="Hot reload all active sessions">
-            <Zap size={13} color="#f59e0b" />
+          <button
+            className="btn-glass"
+            onClick={onReloadAll}
+            disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+            title={anyTargetRunning ? "Hot reload all active sessions" : "No active sessions to reload"}
+          >
+            <Zap size={13} color={anyTargetRunning ? "#f59e0b" : "var(--text-muted)"} />
             <span>Reload All</span>
           </button>
 
-          <button className="btn-glass" onClick={onRestartAll} title="Restart all active sessions">
-            <RotateCw size={13} color="#06b6d4" />
+          <button
+            className="btn-glass"
+            onClick={onRestartAll}
+            disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+            title={anyTargetRunning ? "Restart all active sessions" : "No active sessions to restart"}
+          >
+            <RotateCw size={13} color={anyTargetRunning ? "#06b6d4" : "var(--text-muted)"} />
             <span>Restart All</span>
           </button>
 
-          <button className="btn-danger" onClick={onStopAll} title="Stop all running processes">
-            <Square size={13} fill="currentColor" />
-            <span>Stop All</span>
+          <button
+            className={`btn-danger ${isStoppingAll ? "loading" : ""}`}
+            onClick={onStopAll}
+            disabled={isStoppingAll || !anyTargetRunning}
+            title={
+              isStoppingAll
+                ? "Stopping running processes..."
+                : !anyTargetRunning
+                ? "No running processes to stop"
+                : "Stop all running processes"
+            }
+          >
+            {isStoppingAll ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Square size={13} fill="currentColor" />
+            )}
+            <span>{isStoppingAll ? "Stopping..." : "Stop All"}</span>
           </button>
+
+          {onOpenDevOptions && (
+            <button
+              className="btn-glass dev-options-trigger"
+              onClick={() => onOpenDevOptions()}
+              title="Configure Dev Server & Runner Profiles"
+            >
+              <Sliders size={13} color="#38bdf8" />
+              <span>Dev Options</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -203,6 +268,17 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                     <RotateCw size={13} color="#06b6d4" />
                     <span>Restart</span>
                   </button>
+
+                  {onOpenDevOptions && (
+                    <button
+                      className="target-btn-action glass"
+                      onClick={() => onOpenDevOptions(target.id)}
+                      title="Configure Runner / Dev Server Options for this Target"
+                    >
+                      <Sliders size={13} color="#38bdf8" />
+                      <span>Options</span>
+                    </button>
+                  )}
 
                   <button
                     className="target-btn-action terminal-jump"

@@ -18,7 +18,7 @@ pub struct XcodeAdapter {
 impl XcodeAdapter {
     pub fn new() -> Self {
         Self {
-            apple_runner: Arc::new(ApplePlatformRunner),
+            apple_runner: Arc::new(ApplePlatformRunner::new()),
         }
     }
 
@@ -225,6 +225,11 @@ impl FrameworkAdapter for XcodeAdapter {
 
         info!("Launching Xcode app bundle: {}", bundle_id);
         self.apple_runner.launch(&ctx.project_dir, &ctx.device, Some(&bundle_id)).await
+    }
+
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping Xcode app...");
+        self.apple_runner.stop(&ctx.project_dir, &ctx.device).await
     }
 
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {

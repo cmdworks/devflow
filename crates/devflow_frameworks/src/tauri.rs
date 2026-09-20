@@ -110,6 +110,11 @@ impl FrameworkAdapter for TauriFrameworkAdapter {
         self.desktop_runner.launch(&ctx.project_dir, &ctx.device, Some(bin_path)).await
     }
 
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping Tauri application...");
+        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await
+    }
+
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
         // Classify whether changes are frontend-only or backend Rust
         let has_native_changes = ctx.changed_files.iter().any(|p| {

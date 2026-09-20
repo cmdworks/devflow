@@ -5,14 +5,23 @@ use devflow_logs::LogParser;
 use devflow_protocol::{Device, LogEntry};
 use std::path::Path;
 use std::process::Stdio;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Mutex};
 use tracing::{debug, info, warn};
 
-pub struct AndroidPlatformRunner;
+pub struct AndroidPlatformRunner {
+    active_package: Arc<Mutex<Option<String>>>,
+}
 
 impl AndroidPlatformRunner {
+    pub fn new() -> Self {
+        Self {
+            active_package: Arc::new(Mutex::new(None)),
+        }
+    }
+
     pub fn resolve_adb() -> String {
         if std::process::Command::new("adb").arg("version").output().is_ok() {
             return "adb".to_string();
@@ -30,6 +39,12 @@ impl AndroidPlatformRunner {
             }
         }
         "adb".to_string()
+    }
+}
+
+impl Default for AndroidPlatformRunner {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -55,9 +70,15 @@ impl PlatformRunner for AndroidPlatformRunner {
         Ok(())
     }
 
-    async fn launch(&self, _project_dir: &Path, device: &Device, launch_cmd: Option<&str>) -> Result<()> {
+    async fn launch(&self, project_dir: &Path, device: &Device, launch_cmd: Option<&str>) -> Result<()> {
+        self.stop(project_dir, device).await?;
+
         let launch_target = launch_cmd.ok_or_else(|| DevflowError::Launch("No launch command or activity specified".to_string()))?;
         info!("Launching Android activity/intent: {}", launch_target);
+
+        let pkg = launch_target.split('/').next().unwrap_or(launch_target).to_string();
+        let mut p_lock = self.active_package.lock().await;
+        *p_lock = Some(pkg);
 
         // If launch_cmd is a full adb command or component name
         let output = if launch_target.starts_with("adb") {
@@ -84,7 +105,14 @@ impl PlatformRunner for AndroidPlatformRunner {
     }
 
     async fn stop(&self, _project_dir: &Path, device: &Device) -> Result<()> {
-        debug!("Stopping Android package on device {}", device.id);
+        let pkg = self.active_package.lock().await.take();
+        if let Some(p) = pkg {
+            debug!("Stopping Android package {} on device {}", p, device.id);
+            let adb = Self::resolve_adb();
+            let mut cmd = Command::new(&adb);
+            cmd.args(["-s", &device.id, "shell", "am", "force-stop", &p]);
+            let _ = cmd.output().await;
+        }
         Ok(())
     }
 

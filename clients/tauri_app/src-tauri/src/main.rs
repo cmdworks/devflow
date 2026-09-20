@@ -35,6 +35,9 @@ struct AppState {
     active_sessions: Arc<Mutex<HashMap<String, Arc<SessionManager>>>>,
 }
 
+#[cfg(target_os = "macos")]
+static MACOS_DIALOG_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/devflow-dialog-macos"));
+
 #[derive(Deserialize)]
 struct WorkspaceQuery {
     dir: Option<String>,
@@ -291,7 +294,9 @@ struct WorkspacePathRequest {
 }
 
 fn resolve_workspace_path(input: &str) -> Option<PathBuf> {
-    let raw = input.trim();
+    let raw = input.trim().trim_matches('"').trim_matches('\'');
+    let raw = raw.strip_prefix("file://").unwrap_or(raw);
+    let raw = raw.trim_end_matches('/');
     if raw.is_empty() {
         return None;
     }
@@ -326,7 +331,8 @@ fn resolve_workspace_path(input: &str) -> Option<PathBuf> {
     // 3. Match against known projects by name or path (case-insensitive)
     let known = GlobalRegistry::list_projects();
     for p in known {
-        if p.name.eq_ignore_ascii_case(raw) || p.path.eq_ignore_ascii_case(raw) {
+        let p_clean = p.path.trim_end_matches('/');
+        if p.name.eq_ignore_ascii_case(raw) || p_clean.eq_ignore_ascii_case(raw) {
             let pb = PathBuf::from(&p.path);
             if pb.exists() && pb.is_dir() {
                 return Some(pb.canonicalize().unwrap_or(pb));
@@ -335,6 +341,50 @@ fn resolve_workspace_path(input: &str) -> Option<PathBuf> {
     }
 
     None
+}
+
+static CACHED_DEVICES: std::sync::LazyLock<std::sync::RwLock<Vec<Device>>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(Vec::new()));
+static DEVICE_CACHE_INITIALIZED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn get_cached_devices() -> Vec<Device> {
+    if let Ok(lock) = CACHED_DEVICES.read() {
+        lock.clone()
+    } else {
+        Vec::new()
+    }
+}
+
+async fn get_or_refresh_devices() -> Vec<Device> {
+    if DEVICE_CACHE_INITIALIZED.load(std::sync::atomic::Ordering::Relaxed) {
+        let cached = get_cached_devices();
+        // Background async refresh without blocking caller
+        tokio::spawn(async {
+            let fresh = DeviceManager::discover_all().await;
+            if let Ok(mut lock) = CACHED_DEVICES.write() {
+                *lock = fresh;
+            }
+        });
+        return cached;
+    }
+
+    // Fast initial discovery: return host desktop device immediately (< 1ms)
+    let desktop = devflow_devices::DesktopDiscoverer::discover().await;
+    if let Ok(mut lock) = CACHED_DEVICES.write() {
+        *lock = desktop.clone();
+    }
+    DEVICE_CACHE_INITIALIZED.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // Spawn full background scan for emulators, ADB, simulators
+    tokio::spawn(async {
+        let fresh = DeviceManager::discover_all().await;
+        if let Ok(mut lock) = CACHED_DEVICES.write() {
+            *lock = fresh;
+        }
+    });
+
+    desktop
 }
 
 async fn handle_list_workspaces() -> Json<Vec<KnownProject>> {
@@ -358,7 +408,7 @@ async fn handle_add_workspace(
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "Workspace".to_string());
     let targets = Project::discover_workspace_targets(&canonical);
-    let devices = DeviceManager::discover_all().await;
+    let devices = get_or_refresh_devices().await;
     let active_sessions = GlobalRegistry::list_active_sessions();
 
     let primary_platform = targets
@@ -384,7 +434,9 @@ async fn handle_add_workspace(
 async fn handle_remove_workspace(
     Json(req): Json<WorkspacePathRequest>,
 ) -> Json<serde_json::Value> {
-    let p = PathBuf::from(&req.path);
+    let clean = req.path.trim().trim_matches('"').trim_matches('\'');
+    let clean = clean.strip_prefix("file://").unwrap_or(clean);
+    let p = PathBuf::from(clean);
     GlobalRegistry::remove_project(&p);
     Json(serde_json::json!({ "success": true }))
 }
@@ -409,19 +461,8 @@ async fn handle_workspace(
         .unwrap_or_else(|| "Workspace".to_string());
 
     let targets = Project::discover_workspace_targets(&canonical);
-    let devices = DeviceManager::discover_all().await;
+    let devices = get_or_refresh_devices().await;
     let active_sessions = GlobalRegistry::list_active_sessions();
-
-    let primary_platform = targets
-        .first()
-        .map(|t| t.platform)
-        .unwrap_or(Platform::Generic);
-    let primary_framework = targets
-        .first()
-        .map(|t| t.framework.clone())
-        .unwrap_or_else(|| "generic".to_string());
-
-    GlobalRegistry::record_project(&canonical, &workspace_name, primary_platform, &primary_framework);
 
     Json(WorkspaceResponse {
         workspace_name,
@@ -434,6 +475,10 @@ async fn handle_workspace(
 
 async fn handle_devices() -> Json<Vec<Device>> {
     let devices = DeviceManager::discover_all().await;
+    if let Ok(mut lock) = CACHED_DEVICES.write() {
+        *lock = devices.clone();
+    }
+    DEVICE_CACHE_INITIALIZED.store(true, std::sync::atomic::Ordering::Relaxed);
     Json(devices)
 }
 
@@ -503,7 +548,18 @@ async fn handle_stop_target(
         let _ = sess.stop().await;
         Json(serde_json::json!({ "success": true, "message": format!("Stopped target {}", req.target_id) }))
     } else {
-        Json(serde_json::json!({ "success": false, "message": "Target not running" }))
+        // Fallback: kill any orphan process matching target ID or binary name
+        let target_name = req.target_id.clone();
+        #[cfg(unix)]
+        {
+            let _ = tokio::process::Command::new("pkill")
+                .arg("-9")
+                .arg("-f")
+                .arg(&target_name)
+                .output()
+                .await;
+        }
+        Json(serde_json::json!({ "success": true, "message": format!("Cleaned up target {}", req.target_id) }))
     }
 }
 
@@ -578,21 +634,88 @@ async fn handle_events_sse(
 async fn handle_pick_folder() -> Json<serde_json::Value> {
     #[cfg(target_os = "macos")]
     {
-        let output = tokio::process::Command::new("osascript")
-            .arg("-e")
-            .arg("POSIX path of (choose folder with prompt \"Select DevFlow Workspace Directory\")")
-            .output()
-            .await;
-
-        if let Ok(out) = output {
-            if out.status.success() {
-                let path_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                if !path_str.is_empty() {
-                    return Json(serde_json::json!({ "success": true, "path": path_str }));
+        let res = tokio::task::spawn_blocking(|| -> Result<String, anyhow::Error> {
+            // 1. Ensure /tmp/devflow-dialog-macos binary exists and has execute permissions
+            let tmp_bin = PathBuf::from("/tmp/devflow-dialog-macos");
+            if !tmp_bin.exists() && !MACOS_DIALOG_BIN.is_empty() {
+                if let Ok(_) = std::fs::write(&tmp_bin, MACOS_DIALOG_BIN) {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = std::fs::set_permissions(&tmp_bin, std::fs::Permissions::from_mode(0o755));
+                    }
                 }
             }
+
+            // 2. Fast compiled native Cocoa NSOpenPanel helper (< 10ms launch)
+            let helper_candidates = [
+                Some(tmp_bin),
+                std::env::current_exe()
+                    .ok()
+                    .and_then(|p| p.parent().map(|dir| dir.join("devflow-dialog-macos"))),
+            ];
+
+            for candidate in helper_candidates.into_iter().flatten() {
+                if candidate.exists() {
+                    if let Ok(output) = std::process::Command::new(&candidate).output() {
+                        if output.status.success() {
+                            let raw = String::from_utf8_lossy(&output.stdout);
+                            let path_str = raw.trim().trim_end_matches('/').to_string();
+                            if !path_str.is_empty() {
+                                return Ok(path_str);
+                            }
+                        } else {
+                            // User clicked cancel in native dialog
+                            return Ok(String::new());
+                        }
+                    }
+                }
+            }
+
+            // 3. Fallback to AppleScript with foreground activation
+            let script = r#"
+                tell application "System Events"
+                    activate
+                    try
+                        set chosenFolder to choose folder with prompt "Select DevFlow Workspace Directory"
+                        return POSIX path of chosenFolder
+                    on error number -128
+                        return ""
+                    end try
+                end tell
+            "#;
+            let out = std::process::Command::new("osascript")
+                .arg("-e")
+                .arg(script)
+                .output()?;
+            if out.status.success() {
+                let raw = String::from_utf8_lossy(&out.stdout);
+                Ok(raw.trim().trim_end_matches('/').to_string())
+            } else {
+                Ok(String::new())
+            }
+        })
+        .await;
+
+        if let Ok(Ok(path_str)) = res {
+            if !path_str.is_empty() {
+                return Json(serde_json::json!({ "success": true, "path": path_str }));
+            }
         }
+        return Json(serde_json::json!({ "success": false }));
     }
-    Json(serde_json::json!({ "success": false }))
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        if let Some(folder) = rfd::AsyncFileDialog::new()
+            .set_title("Select DevFlow Workspace Directory")
+            .pick_folder()
+            .await
+        {
+            let path_str = folder.path().display().to_string();
+            return Json(serde_json::json!({ "success": true, "path": path_str }));
+        }
+        Json(serde_json::json!({ "success": false }))
+    }
 }
 

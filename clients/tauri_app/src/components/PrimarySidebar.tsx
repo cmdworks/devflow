@@ -8,6 +8,9 @@ import {
   Info,
   Check,
   FolderGit2,
+  ChevronLeft,
+  ChevronRight,
+  Trash2,
 } from "lucide-react";
 import type { KnownWorkspace, ViewSection, Device } from "../types";
 import { WorkspaceInfoPopover } from "./WorkspaceInfoPopover";
@@ -17,6 +20,8 @@ interface PrimarySidebarProps {
   knownWorkspaces: KnownWorkspace[];
   activeSection: ViewSection;
   devices: Device[];
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
   onSelectWorkspace: (path: string) => void;
   onAddWorkspace: () => void;
   onSelectSection: (section: ViewSection) => void;
@@ -30,6 +35,8 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
   knownWorkspaces,
   activeSection,
   devices,
+  isCollapsed,
+  onToggleCollapse,
   onSelectWorkspace,
   onAddWorkspace,
   onSelectSection,
@@ -56,30 +63,129 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
     setRenamingPath(null);
   };
 
-  const handleInfoClick = (ws: KnownWorkspace, e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleInfoClick = (ws: KnownWorkspace, e: React.MouseEvent<HTMLElement>) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
     setPopoverAnchor(rect);
     setPopoverWorkspace(ws);
   };
 
-  const onlineDevicesCount = devices.filter((d) => d.online || d.state === "device" || d.state === "booted").length;
+  const onlineDevicesCount = devices.filter(
+    (d) => d.online || d.state === "device" || d.state === "booted"
+  ).length;
 
+  // 1. Collapsed Icon-Rail Mode (52px width)
+  if (isCollapsed) {
+    return (
+      <aside className="primary-sidebar collapsed">
+        <div className="primary-sidebar-header collapsed">
+          <button
+            className="btn-rail-toggle"
+            onClick={onToggleCollapse}
+            title="Expand Workspaces Drawer"
+          >
+            <ChevronRight size={14} />
+          </button>
+          <button
+            className="btn-rail-action"
+            onClick={onAddWorkspace}
+            title="Add / Open Workspace"
+          >
+            <FolderPlus size={14} />
+          </button>
+        </div>
+
+        <div className="primary-workspace-list collapsed">
+          {knownWorkspaces.map((ws) => {
+            const isActive = ws.path === activeWorkspacePath;
+            const displayName = ws.custom_name || ws.name;
+            const initials = displayName.slice(0, 2).toUpperCase();
+            const platformClass = (ws.platform || "generic").toLowerCase();
+
+            return (
+              <div
+                key={ws.path}
+                className={`primary-rail-item ${isActive ? "active" : ""}`}
+                onClick={() => onSelectWorkspace(ws.path)}
+                onContextMenu={(e) => handleInfoClick(ws, e)}
+                title={`${displayName}\n${ws.path}`}
+              >
+                <div className={`ws-avatar-badge ${platformClass}`}>
+                  {initials}
+                </div>
+                {isActive && <span className="rail-active-dot" />}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="primary-sidebar-footer collapsed">
+          <button
+            className={`rail-footer-btn ${activeSection === "devices" ? "active" : ""}`}
+            onClick={() => onSelectSection("devices")}
+            title={`Devices & Emulators (${onlineDevicesCount} online)`}
+          >
+            <Smartphone size={14} color="#38bdf8" />
+            {onlineDevicesCount > 0 && <span className="rail-badge">{onlineDevicesCount}</span>}
+          </button>
+
+          <button
+            className={`rail-footer-btn ${activeSection === "doctor" ? "active" : ""}`}
+            onClick={() => onSelectSection("doctor")}
+            title="Doctor Diagnostics"
+          >
+            <Activity size={14} color="#10b981" />
+          </button>
+
+          <button
+            className="rail-footer-btn"
+            onClick={onOpenSettings}
+            title="DevFlow Settings"
+          >
+            <Settings size={14} color="#94a3b8" />
+          </button>
+        </div>
+
+        {popoverWorkspace && (
+          <WorkspaceInfoPopover
+            workspace={popoverWorkspace}
+            anchorRect={popoverAnchor}
+            onClose={() => {
+              setPopoverWorkspace(null);
+              setPopoverAnchor(null);
+            }}
+            onRemove={onRemoveWorkspace}
+          />
+        )}
+      </aside>
+    );
+  }
+
+  // 2. Expanded Drawer Mode (220px width)
   return (
     <aside className="primary-sidebar">
-      {/* 1. Header: Workspaces Title & Add Trigger */}
+      {/* 1. Header: Workspaces Title & Add / Collapse Trigger */}
       <div className="primary-sidebar-header">
         <div className="primary-header-title">
           <FolderGit2 size={13} color="#06b6d4" />
           <span>WORKSPACES</span>
         </div>
-        <button
-          className="btn-add-workspace-primary"
-          onClick={onAddWorkspace}
-          title="Add / Open Workspace Directory"
-        >
-          <FolderPlus size={14} />
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <button
+            className="btn-add-workspace-primary"
+            onClick={onAddWorkspace}
+            title="Add / Open Workspace Directory"
+          >
+            <FolderPlus size={13} />
+          </button>
+          <button
+            className="btn-add-workspace-primary"
+            onClick={onToggleCollapse}
+            title="Collapse Sidebar"
+          >
+            <ChevronLeft size={13} />
+          </button>
+        </div>
       </div>
 
       {/* 2. Workspace List */}
@@ -93,7 +199,7 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
           </div>
         ) : (
           knownWorkspaces.map((ws) => {
-            const isActive = ws.path === activeWorkspacePath && activeSection !== "devices" && activeSection !== "doctor";
+            const isActive = ws.path === activeWorkspacePath;
             const displayName = ws.custom_name || ws.name;
             const isEditing = renamingPath === ws.path;
             const initials = displayName.slice(0, 2).toUpperCase();
@@ -169,6 +275,16 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
                       title="Workspace Details & Path"
                     >
                       <Info size={12} />
+                    </button>
+                    <button
+                      className="btn-ws-subaction remove-btn"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveWorkspace(ws.path);
+                      }}
+                      title="Remove Workspace from List"
+                    >
+                      <Trash2 size={11} color="#f87171" />
                     </button>
                   </div>
                 )}

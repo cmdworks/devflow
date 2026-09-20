@@ -26,6 +26,8 @@ pub struct DoctorCheck {
     pub status: CheckStatus,
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detected_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_hint: Option<String>,
@@ -37,6 +39,18 @@ impl DoctorCheck {
             name: name.into(),
             status: CheckStatus::Passed,
             message: message.into(),
+            category: None,
+            detected_version: version,
+            fix_hint: None,
+        }
+    }
+
+    pub fn pass_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, version: Option<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: CheckStatus::Passed,
+            message: message.into(),
+            category: Some(category.into()),
             detected_version: version,
             fix_hint: None,
         }
@@ -47,6 +61,18 @@ impl DoctorCheck {
             name: name.into(),
             status: CheckStatus::Warning,
             message: message.into(),
+            category: None,
+            detected_version: None,
+            fix_hint,
+        }
+    }
+
+    pub fn warn_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, fix_hint: Option<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: CheckStatus::Warning,
+            message: message.into(),
+            category: Some(category.into()),
             detected_version: None,
             fix_hint,
         }
@@ -57,9 +83,26 @@ impl DoctorCheck {
             name: name.into(),
             status: CheckStatus::Failed,
             message: message.into(),
+            category: None,
             detected_version: None,
             fix_hint,
         }
+    }
+
+    pub fn fail_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, fix_hint: Option<String>) -> Self {
+        Self {
+            name: name.into(),
+            status: CheckStatus::Failed,
+            message: message.into(),
+            category: Some(category.into()),
+            detected_version: None,
+            fix_hint,
+        }
+    }
+
+    pub fn with_category(mut self, category: impl Into<String>) -> Self {
+        self.category = Some(category.into());
+        self
     }
 }
 

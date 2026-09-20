@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Folder,
   FolderPlus,
@@ -19,44 +19,46 @@ import type { KnownWorkspace } from "../types";
 interface WorkspaceModalProps {
   currentPath: string;
   isOpen: boolean;
+  knownWorkspaces?: KnownWorkspace[];
   onClose: () => void;
-  onSelectWorkspace: (path: string) => void;
+  onSelectWorkspace: (path: string, workspaceData?: import("../types").WorkspaceResponse) => void;
+  onRemoveWorkspace?: (path: string) => void;
 }
 
 export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   currentPath,
   isOpen,
+  knownWorkspaces = [],
   onClose,
   onSelectWorkspace,
+  onRemoveWorkspace,
 }) => {
   const api = useDevFlowApi();
-  const [workspaces, setWorkspaces] = useState<KnownWorkspace[]>([]);
+  const [localWorkspaces, setLocalWorkspaces] = useState<KnownWorkspace[]>(knownWorkspaces);
   const [newPathInput, setNewPathInput] = useState<string>("");
-  const [isListLoading, setIsListLoading] = useState<boolean>(false);
   const [isOpening, setIsOpening] = useState<boolean>(false);
   const [isPickingFolder, setIsPickingFolder] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const loadWorkspaces = useCallback(async () => {
-    try {
-      setIsListLoading(true);
-      const list = await api.fetchWorkspaces();
-      setWorkspaces(list || []);
-      setErrorMessage(null);
-    } catch (err: any) {
-      console.error("Failed to load known workspaces:", err);
-    } finally {
-      setIsListLoading(false);
+  // Keep localWorkspaces synchronized with prop without flashing
+  useEffect(() => {
+    if (knownWorkspaces && knownWorkspaces.length > 0) {
+      setLocalWorkspaces(knownWorkspaces);
     }
-  }, [api]);
+  }, [knownWorkspaces]);
 
   useEffect(() => {
     if (isOpen) {
-      loadWorkspaces();
       setNewPathInput("");
       setErrorMessage(null);
+      // Background silent refresh of workspaces list
+      api.fetchWorkspaces().then((list) => {
+        if (list && Array.isArray(list)) {
+          setLocalWorkspaces(list);
+        }
+      }).catch(() => {});
     }
-  }, [isOpen, loadWorkspaces]);
+  }, [isOpen, api]);
 
   if (!isOpen) return null;
 
@@ -71,8 +73,8 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
     try {
       setIsOpening(true);
       setErrorMessage(null);
-      await api.addWorkspace(trimmed);
-      onSelectWorkspace(trimmed);
+      const wsData = await api.addWorkspace(trimmed);
+      onSelectWorkspace(wsData.workspace_path || trimmed, wsData);
       onClose();
     } catch (err: any) {
       setErrorMessage(err?.message || "Failed to open directory. Verify path exists.");
@@ -88,11 +90,10 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
       const res = await api.pickFolder();
       if (res.success && res.path) {
         setNewPathInput(res.path);
-        // Automatically attempt to add and open
         try {
           setIsOpening(true);
-          await api.addWorkspace(res.path);
-          onSelectWorkspace(res.path);
+          const wsData = await api.addWorkspace(res.path);
+          onSelectWorkspace(wsData.workspace_path || res.path, wsData);
           onClose();
         } catch (err: any) {
           setErrorMessage(err?.message || "Failed to open directory.");
@@ -122,8 +123,12 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   const handleRemove = async (e: React.MouseEvent, path: string) => {
     e.stopPropagation();
     try {
-      await api.removeWorkspace(path);
-      setWorkspaces((prev) => prev.filter((w) => w.path !== path));
+      setLocalWorkspaces((prev) => prev.filter((w) => w.path !== path));
+      if (onRemoveWorkspace) {
+        await onRemoveWorkspace(path);
+      } else {
+        await api.removeWorkspace(path);
+      }
     } catch (err) {
       console.error("Failed to remove workspace:", err);
     }
@@ -308,7 +313,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 }}
               >
                 {isPickingFolder ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
-                <span>Browse...</span>
+                <span>{isPickingFolder ? "Opening..." : "Browse..."}</span>
               </button>
 
               {/* Open Submit Button */}
@@ -335,6 +340,43 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               </button>
             </div>
 
+            {/* Quick Path Preset Chips */}
+            <div className="quick-path-chips">
+              <span className="quick-path-label">Quick:</span>
+              <button
+                type="button"
+                className="chip-quick-path"
+                onClick={() => setNewPathInput(".")}
+                title="Current Directory"
+              >
+                Current Dir (.)
+              </button>
+              <button
+                type="button"
+                className="chip-quick-path"
+                onClick={() => setNewPathInput("~")}
+                title="User Home Directory"
+              >
+                Home (~)
+              </button>
+              <button
+                type="button"
+                className="chip-quick-path"
+                onClick={() => setNewPathInput("~/Dev/Projects")}
+                title="~/Dev/Projects"
+              >
+                ~/Dev/Projects
+              </button>
+              <button
+                type="button"
+                className="chip-quick-path"
+                onClick={() => setNewPathInput("~/Desktop")}
+                title="~/Desktop"
+              >
+                ~/Desktop
+              </button>
+            </div>
+
             {errorMessage && (
               <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#ef4444", fontSize: "12px" }}>
                 <AlertCircle size={13} />
@@ -354,11 +396,8 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               }}
             >
               <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                Recent & Known Workspaces ({workspaces.length})
+                Recent & Known Workspaces ({localWorkspaces.length})
               </span>
-              {isListLoading && (
-                <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Refreshing...</span>
-              )}
             </div>
 
             <div
@@ -370,7 +409,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 overflowY: "auto",
               }}
             >
-              {workspaces.length === 0 ? (
+              {localWorkspaces.length === 0 ? (
                 <div
                   style={{
                     textAlign: "center",
@@ -384,7 +423,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   No other known workspaces recorded yet. Enter a directory path above to open.
                 </div>
               ) : (
-                workspaces.map((ws) => {
+                localWorkspaces.map((ws) => {
                   const isCurrent = ws.path === currentPath || ws.name === currentPath;
                   return (
                     <div

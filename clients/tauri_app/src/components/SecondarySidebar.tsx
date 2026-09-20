@@ -3,8 +3,6 @@ import {
   LayoutDashboard,
   Zap,
   Terminal,
-  Radio,
-  Plus,
   ChevronLeft,
   ChevronRight,
   FolderGit2,
@@ -35,8 +33,9 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
   onToggleCollapse,
   onSelectSection,
   onOpenTargetPane,
-  onOpenCombinedPane,
 }) => {
+  const runningTargetsCount = activeSessions.length;
+
   if (isCollapsed) {
     return (
       <div className="secondary-sidebar-collapsed">
@@ -47,11 +46,36 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
         >
           <ChevronRight size={14} />
         </button>
+
+        <div className="secondary-collapsed-nav">
+          <button
+            className={`secondary-icon-btn ${activeSection === "overview" ? "active" : ""}`}
+            onClick={() => onSelectSection("overview")}
+            title="Overview"
+          >
+            <LayoutDashboard size={14} />
+          </button>
+
+          <button
+            className={`secondary-icon-btn ${activeSection === "targets" ? "active" : ""}`}
+            onClick={() => onSelectSection("targets")}
+            title={`Targets (${targets.length})`}
+          >
+            <Zap size={14} />
+            {runningTargetsCount > 0 && <span className="icon-pulse-badge" />}
+          </button>
+
+          <button
+            className={`secondary-icon-btn ${activeSection === "terminal" ? "active" : ""}`}
+            onClick={() => onSelectSection("terminal")}
+            title="Terminal Logs"
+          >
+            <Terminal size={14} />
+          </button>
+        </div>
       </div>
     );
   }
-
-  const runningTargetsCount = activeSessions.length;
 
   return (
     <aside className="secondary-sidebar">
@@ -72,10 +96,8 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
         </button>
       </div>
 
-      {/* 2. Workspace View Tabs */}
+      {/* 2. Workspace View Navigation */}
       <div className="secondary-nav-section">
-        <div className="section-label">WORKSPACE VIEWS</div>
-
         <button
           className={`secondary-nav-item ${activeSection === "overview" ? "active" : ""}`}
           onClick={() => onSelectSection("overview")}
@@ -89,7 +111,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
           onClick={() => onSelectSection("targets")}
         >
           <Zap size={14} />
-          <span>Targets & Matrix</span>
+          <span>Targets</span>
           {runningTargetsCount > 0 && (
             <span className="nav-running-badge">{runningTargetsCount}</span>
           )}
@@ -100,7 +122,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
           onClick={() => onSelectSection("terminal")}
         >
           <Terminal size={14} />
-          <span>Terminal Logs</span>
+          <span>Terminal</span>
           <span className="nav-stream-dot" />
         </button>
       </div>
@@ -127,7 +149,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
                     onOpenTargetPane(target);
                     onSelectSection("terminal");
                   }}
-                  title={`Open terminal pane for ${target.name}`}
+                  title={`Open / focus terminal pane for ${target.name}`}
                 >
                   <div className="target-card-main">
                     <div className="target-card-name">{target.name}</div>
@@ -147,36 +169,13 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
                       <span>{target.framework}</span>
                     </div>
                   </div>
-
-                  <button
-                    className="btn-quick-open-pane"
-                    title="Open in Terminal Tab"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenTargetPane(target);
-                      onSelectSection("terminal");
-                    }}
-                  >
-                    <Plus size={12} />
-                  </button>
                 </div>
               );
             })
           )}
         </div>
-
-        <button
-          className="btn-combined-stream"
-          onClick={() => {
-            onOpenCombinedPane();
-            onSelectSection("terminal");
-          }}
-          title="Aggregated Multi-Target Live Stream"
-        >
-          <Radio size={13} color="#06b6d4" />
-          <span>Combined Stream</span>
-        </button>
       </div>
     </aside>
   );
 };
+

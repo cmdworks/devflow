@@ -60,16 +60,22 @@ export interface LogEntry {
 
 export interface DoctorCheck {
   name: string;
-  status: "Pass" | "Warn" | "Fail";
+  status: "passed" | "warning" | "failed" | "skipped" | "Pass" | "Warn" | "Fail" | string;
   message: string;
+  category?: string;
+  detected_version?: string;
   details?: string;
   fix_hint?: string;
 }
 
 export interface DoctorReport {
-  workspace_path: string;
+  project_path?: string;
+  workspace_path?: string;
   checks: DoctorCheck[];
-  summary: {
+  passed_count?: number;
+  warning_count?: number;
+  failure_count?: number;
+  summary?: {
     passed: number;
     warnings: number;
     failed: number;

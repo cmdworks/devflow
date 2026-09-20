@@ -22,6 +22,8 @@ pub struct SessionManager {
     pub state: Arc<RwLock<SessionState>>,
     pub log_buffer: LogBuffer,
     pub event_bus: EventBus,
+    pub log_stream_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    pub watcher_handle: Arc<tokio::sync::Mutex<Option<tokio::task::JoinHandle<()>>>>,
 }
 
 impl SessionManager {
@@ -72,6 +74,8 @@ impl SessionManager {
             state: Arc::new(RwLock::new(state)),
             log_buffer: LogBuffer::default(),
             event_bus,
+            log_stream_handle: Arc::new(tokio::sync::Mutex::new(None)),
+            watcher_handle: Arc::new(tokio::sync::Mutex::new(None)),
         })
     }
 
@@ -206,6 +210,23 @@ impl SessionManager {
         if !build_res.success {
             self.set_status(SessionStatus::Failed);
             self.set_last_error(build_res.error_message.clone());
+
+            // Run ToolchainExplainer to check for actionable remediation hints
+            if let Some(exp) = devflow_core::ToolchainExplainer::explain_error(
+                self.adapter.name(),
+                &build_res.stderr,
+                &build_res.stdout,
+                &self.project.name,
+            ) {
+                let mut hint_entry = LogEntry::new(devflow_protocol::LogLevel::E, exp.ansi_banner);
+                hint_entry.tag = Some("toolchain-doctor".to_string());
+                self.log_buffer.push(hint_entry.clone());
+                self.event_bus.publish(DevflowEvent::LogAppended {
+                    session_id: session_id.clone(),
+                    entry: hint_entry,
+                });
+            }
+
             let fail_msg = format!("✗ Build failed in {}ms: {}", build_res.duration_ms, build_res.error_message.unwrap_or_else(|| "Unknown compiler error".to_string()));
             let mut fail_entry = LogEntry::new(devflow_protocol::LogLevel::E, fail_msg);
             fail_entry.tag = Some("build".to_string());
@@ -260,7 +281,7 @@ impl SessionManager {
         let event_bus = self.event_bus.clone();
         let session_id = self.get_state().session_id;
 
-        tokio::spawn(async move {
+        let log_task = tokio::spawn(async move {
             while let Some(entry) = log_rx.recv().await {
                 log_buffer.push(entry.clone());
                 event_bus.publish(DevflowEvent::LogAppended {
@@ -271,6 +292,7 @@ impl SessionManager {
         });
 
         let _ = self.adapter.stream_logs(&dev_ctx, log_tx).await;
+        *self.log_stream_handle.lock().await = Some(log_task);
 
         // Start File Watcher
         let (watch_tx, mut watch_rx) = mpsc::channel(64);
@@ -279,7 +301,7 @@ impl SessionManager {
 
         if let Ok(_w_handle) = watcher.start(watch_tx) {
             let session_clone = self.clone();
-            tokio::spawn(async move {
+            let watch_task = tokio::spawn(async move {
                 while let Some(change) = watch_rx.recv().await {
                     let path_strings: Vec<String> = change.paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
                     session_clone.event_bus.publish(DevflowEvent::WatcherTriggered {
@@ -299,6 +321,7 @@ impl SessionManager {
                     }
                 }
             });
+            *self.watcher_handle.lock().await = Some(watch_task);
         }
 
         self.set_status(SessionStatus::Running);
@@ -306,7 +329,7 @@ impl SessionManager {
     }
 
     pub async fn reload(&self, changed_files: Vec<PathBuf>) -> Result<()> {
-        info!("Reloading session...");
+        info!("Reloading session for target '{}'...", self.project.name);
         self.set_status(SessionStatus::Reloading);
 
         let ctx = ReloadContext {
@@ -333,7 +356,7 @@ impl SessionManager {
     }
 
     pub async fn restart(&self) -> Result<()> {
-        info!("Restarting app...");
+        info!("Restarting target '{}' on device '{}'...", self.project.name, self.device.name);
         self.set_status(SessionStatus::Restarting);
 
         let dev_ctx = DeviceContext {
@@ -343,16 +366,51 @@ impl SessionManager {
             artifact_path: None,
         };
 
-        let res = self.adapter.restart(&dev_ctx).await;
+        let restart_msg = format!("⚡ Restarting target '{}'...", self.project.name);
+        let mut restart_entry = LogEntry::new(devflow_protocol::LogLevel::I, restart_msg);
+        restart_entry.tag = Some("lifecycle".to_string());
+        self.log_buffer.push(restart_entry.clone());
+        self.event_bus.publish(DevflowEvent::LogAppended {
+            session_id: self.get_state().session_id,
+            entry: restart_entry,
+        });
+
+        // 1. Terminate old running process
+        let _ = self.adapter.stop(&dev_ctx).await;
+        if let Some(h) = self.log_stream_handle.lock().await.take() {
+            h.abort();
+        }
+
+        // 2. Re-launch target
+        let res = self.adapter.launch(&dev_ctx).await;
         match res {
             Ok(_) => {
+                // 3. Re-attach log streaming
+                let (log_tx, mut log_rx) = mpsc::channel::<LogEntry>(256);
+                let log_buffer = self.log_buffer.clone();
+                let event_bus = self.event_bus.clone();
+                let session_id = self.get_state().session_id;
+
+                let log_task = tokio::spawn(async move {
+                    while let Some(entry) = log_rx.recv().await {
+                        log_buffer.push(entry.clone());
+                        event_bus.publish(DevflowEvent::LogAppended {
+                            session_id: session_id.clone(),
+                            entry,
+                        });
+                    }
+                });
+
+                let _ = self.adapter.stream_logs(&dev_ctx, log_tx).await;
+                *self.log_stream_handle.lock().await = Some(log_task);
+
                 let mut state = self.state.write().unwrap();
                 state.restart_count += 1;
                 self.set_status(SessionStatus::Running);
                 Ok(())
             }
             Err(e) => {
-                self.set_status(SessionStatus::Running);
+                self.set_status(SessionStatus::Failed);
                 self.set_last_error(Some(e.to_string()));
                 Err(e)
             }
@@ -360,8 +418,39 @@ impl SessionManager {
     }
 
     pub async fn stop(&self) -> Result<()> {
-        info!("Stopping session...");
+        info!("Stopping session for target '{}'...", self.project.name);
         self.set_status(SessionStatus::Stopped);
+
+        let dev_ctx = DeviceContext {
+            project_dir: self.project.root_dir.clone(),
+            config: self.project.effective_config(),
+            device: self.device.clone(),
+            artifact_path: None,
+        };
+
+        // 1. Physically stop running target via adapter & platform runner
+        let _ = self.adapter.stop(&dev_ctx).await;
+
+        // 2. Abort active log stream task
+        if let Some(h) = self.log_stream_handle.lock().await.take() {
+            h.abort();
+        }
+
+        // 3. Abort file watcher task
+        if let Some(h) = self.watcher_handle.lock().await.take() {
+            h.abort();
+        }
+
+        // 4. Publish stop log entry
+        let stop_msg = format!("■ Target '{}' stopped.", self.project.name);
+        let mut stop_entry = LogEntry::new(devflow_protocol::LogLevel::I, stop_msg);
+        stop_entry.tag = Some("lifecycle".to_string());
+        self.log_buffer.push(stop_entry.clone());
+        self.event_bus.publish(DevflowEvent::LogAppended {
+            session_id: self.get_state().session_id,
+            entry: stop_entry,
+        });
+
         GlobalRegistry::unregister_session(&self.get_state().session_id);
         Ok(())
     }

@@ -125,6 +125,16 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
         }
     }
 
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping generic application on device {}", ctx.device.name);
+        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
+            self.runner.clone()
+        } else {
+            PlatformRegistry::get_runner(ctx.device.platform)
+        };
+        platform_runner.stop(&ctx.project_dir, &ctx.device).await
+    }
+
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
         info!("Generic reload triggered — performing restart for changed files");
         let dev_ctx = DeviceContext {

@@ -65,12 +65,35 @@ impl PlatformRunner for DesktopPlatformRunner {
         Ok(())
     }
 
-    async fn stop(&self, _project_dir: &Path, _device: &Device) -> Result<()> {
+    async fn stop(&self, project_dir: &Path, _device: &Device) -> Result<()> {
         let mut lock = self.active_child.lock().await;
         if let Some(mut child) = lock.take() {
             debug!("Stopping running desktop process...");
+            #[cfg(unix)]
+            if let Some(pid) = child.id() {
+                let _ = tokio::process::Command::new("pkill")
+                    .arg("-9")
+                    .arg("-P")
+                    .arg(pid.to_string())
+                    .output()
+                    .await;
+            }
             let _ = child.kill().await;
             let _ = child.wait().await;
+        }
+
+        // Clean up any orphan processes running from the project's build output directory
+        let dir_str = project_dir.to_string_lossy();
+        if !dir_str.is_empty() {
+            #[cfg(unix)]
+            {
+                let _ = tokio::process::Command::new("pkill")
+                    .arg("-9")
+                    .arg("-f")
+                    .arg(format!("{}/.build", dir_str))
+                    .output()
+                    .await;
+            }
         }
         Ok(())
     }

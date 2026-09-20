@@ -26,7 +26,7 @@ pub struct KotlinFrameworkAdapter {
 impl KotlinFrameworkAdapter {
     pub fn new() -> Self {
         Self {
-            android_runner: Arc::new(AndroidPlatformRunner),
+            android_runner: Arc::new(AndroidPlatformRunner::new()),
         }
     }
 
@@ -228,6 +228,11 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
 
         debug!("Resolved Android launch intent: {}", launch_component);
         self.android_runner.launch(&ctx.project_dir, &ctx.device, Some(&launch_component)).await
+    }
+
+    async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
+        info!("Stopping Kotlin/Android application...");
+        self.android_runner.stop(&ctx.project_dir, &ctx.device).await
     }
 
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {

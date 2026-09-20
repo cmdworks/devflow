@@ -9,6 +9,12 @@ import {
   Smartphone,
   ChevronRight,
   Settings,
+  PanelLeft,
+  Sidebar as SidebarIcon,
+  Search,
+  X,
+  Loader2,
+  Sliders,
 } from "lucide-react";
 import type { ViewSection, Device } from "../types";
 
@@ -16,11 +22,26 @@ interface TopBarProps {
   workspaceName: string;
   activeSection: ViewSection;
   devices: Device[];
+  isPrimarySidebarCollapsed: boolean;
+  isSecondarySidebarCollapsed: boolean;
+  searchQuery?: string;
+  levelFilter?: string;
+  targetsCount?: number;
+  runningTargetsCount?: number;
+  allTargetsRunning?: boolean;
+  anyTargetRunning?: boolean;
+  isStartingAll?: boolean;
+  isStoppingAll?: boolean;
+  onChangeSearch?: (query: string) => void;
+  onSelectLevel?: (level: string) => void;
+  onTogglePrimarySidebar: () => void;
+  onToggleSecondarySidebar: () => void;
   onSelectSection: (section: ViewSection) => void;
   onRunAll: () => void;
   onReloadAll: () => void;
   onRestartAll: () => void;
   onStopAll: () => void;
+  onOpenDevOptions?: () => void;
   onOpenSettings: () => void;
 }
 
@@ -28,11 +49,26 @@ export const TopBar: React.FC<TopBarProps> = ({
   workspaceName,
   activeSection,
   devices,
+  isPrimarySidebarCollapsed,
+  isSecondarySidebarCollapsed,
+  searchQuery = "",
+  levelFilter = "ALL",
+  targetsCount = 0,
+  runningTargetsCount: _runningTargetsCount = 0,
+  allTargetsRunning = false,
+  anyTargetRunning = false,
+  isStartingAll = false,
+  isStoppingAll = false,
+  onChangeSearch,
+  onSelectLevel,
+  onTogglePrimarySidebar,
+  onToggleSecondarySidebar,
   onSelectSection,
   onRunAll,
   onReloadAll,
   onRestartAll,
   onStopAll,
+  onOpenDevOptions,
   onOpenSettings,
 }) => {
   const onlineDevicesCount = devices.filter(
@@ -50,8 +86,26 @@ export const TopBar: React.FC<TopBarProps> = ({
 
   return (
     <header className="top-bar">
-      {/* 1. Left: Brand & Breadcrumb */}
+      {/* 1. Left: Sidebar Toggles & Brand & Breadcrumb */}
       <div className="top-bar-left">
+        <div className="sidebar-toggles-group">
+          <button
+            className={`btn-top-icon-toggle ${!isPrimarySidebarCollapsed ? "active" : ""}`}
+            onClick={onTogglePrimarySidebar}
+            title={isPrimarySidebarCollapsed ? "Expand Workspaces Rail" : "Collapse Workspaces Rail"}
+          >
+            <PanelLeft size={14} />
+          </button>
+
+          <button
+            className={`btn-top-icon-toggle ${!isSecondarySidebarCollapsed ? "active" : ""}`}
+            onClick={onToggleSecondarySidebar}
+            title={isSecondarySidebarCollapsed ? "Expand Workspace Nav" : "Collapse Workspace Nav"}
+          >
+            <SidebarIcon size={14} />
+          </button>
+        </div>
+
         <div className="app-brand" onClick={() => onSelectSection("overview")} style={{ cursor: "pointer" }}>
           <Layers size={16} color="#06b6d4" />
           <span className="brand-name">DevFlow</span>
@@ -81,44 +135,130 @@ export const TopBar: React.FC<TopBarProps> = ({
       {/* 2. Center: Global Process Batch Lifecycle Controls */}
       <div className="top-bar-center">
         <button
-          className="btn-top-action primary"
+          className={`btn-top-action primary ${isStartingAll ? "loading" : ""}`}
           onClick={onRunAll}
-          title="Run all discovered workspace targets"
+          disabled={isStartingAll || allTargetsRunning || targetsCount === 0}
+          title={
+            isStartingAll
+              ? "Starting workspace targets..."
+              : allTargetsRunning
+              ? "All targets are already running"
+              : targetsCount === 0
+              ? "No targets found in workspace"
+              : "Run all workspace targets"
+          }
         >
-          <Play size={12} fill="currentColor" />
-          <span>Run All</span>
+          {isStartingAll ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Play size={12} fill="currentColor" />
+          )}
+          <span>{isStartingAll ? "Starting..." : "Run All"}</span>
         </button>
 
         <button
           className="btn-top-action"
           onClick={onReloadAll}
-          title="Hot reload all active running sessions"
+          disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+          title={anyTargetRunning ? "Hot reload all active running sessions" : "No active sessions to reload"}
         >
-          <Zap size={12} color="#f59e0b" />
+          <Zap size={12} color={anyTargetRunning ? "#f59e0b" : "var(--text-muted)"} />
           <span>Reload</span>
         </button>
 
         <button
           className="btn-top-action"
           onClick={onRestartAll}
-          title="Restart all active apps"
+          disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
+          title={anyTargetRunning ? "Restart all active apps" : "No active sessions to restart"}
         >
-          <RotateCw size={12} color="#06b6d4" />
+          <RotateCw size={12} color={anyTargetRunning ? "#06b6d4" : "var(--text-muted)"} />
           <span>Restart</span>
         </button>
 
         <button
-          className="btn-top-action danger"
+          className={`btn-top-action danger ${isStoppingAll ? "loading" : ""}`}
           onClick={onStopAll}
-          title="Stop all running processes"
+          disabled={isStoppingAll || !anyTargetRunning}
+          title={
+            isStoppingAll
+              ? "Stopping running processes..."
+              : !anyTargetRunning
+              ? "No running processes to stop"
+              : "Stop all running processes"
+          }
         >
-          <Square size={12} fill="currentColor" />
-          <span>Stop All</span>
+          {isStoppingAll ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : (
+            <Square size={12} fill="currentColor" />
+          )}
+          <span>{isStoppingAll ? "Stopping..." : "Stop All"}</span>
         </button>
+
+        {onOpenDevOptions && (
+          <button
+            className="btn-top-action dev-options"
+            onClick={onOpenDevOptions}
+            title="Configure Dev Server, Clean Build, Release Mode, or Force Terminate"
+          >
+            <Sliders size={12} color="#38bdf8" />
+            <span>Options</span>
+          </button>
+        )}
       </div>
 
       {/* 3. Right: System & Tool Status Pills */}
       <div className="top-bar-right">
+        {/* Terminal Log Search & Level Filter (Shown when in Terminal section) */}
+        {activeSection === "terminal" && onChangeSearch && onSelectLevel && (
+          <div className="top-bar-search-group">
+            <div className="top-bar-search-box">
+              <Search size={11} color="var(--text-muted)" />
+              <input
+                type="text"
+                className="top-bar-search-input"
+                placeholder="Search logs..."
+                value={searchQuery}
+                onChange={(e) => onChangeSearch(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="btn-search-clear" onClick={() => onChangeSearch("")} title="Clear search">
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+
+            <div className="top-bar-level-chips">
+              {[
+                { label: "ALL", value: "ALL" },
+                { label: "ERR", value: "E" },
+                { label: "WRN", value: "W" },
+                { label: "INF", value: "I" },
+              ].map(({ label, value }) => {
+                const isActive =
+                  (value === "ALL" && (!levelFilter || levelFilter === "ALL" || levelFilter === "*")) ||
+                  levelFilter === value ||
+                  (value === "E" && (levelFilter === "ERR" || levelFilter === "ERROR")) ||
+                  (value === "W" && (levelFilter === "WRN" || levelFilter === "WARN")) ||
+                  (value === "I" && (levelFilter === "INF" || levelFilter === "INFO"));
+
+                return (
+                  <button
+                    key={label}
+                    className={`chip-level-btn ${isActive ? "active" : ""} ${label.toLowerCase()}`}
+                    onClick={() => onSelectLevel(value)}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="top-bar-divider" />
+          </div>
+        )}
+
         {/* Device Status Pill */}
         <button
           className={`top-status-pill ${activeSection === "devices" ? "active" : ""}`}

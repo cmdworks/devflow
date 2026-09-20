@@ -115,8 +115,23 @@ impl GlobalRegistry {
         Self::ensure_dirs();
         let file_path = Self::projects_file();
         let mut projects = Self::list_projects();
-        let path_str = path.canonicalize().unwrap_or_else(|_| path.to_path_buf()).to_string_lossy().to_string();
-        projects.retain(|p| p.path != path_str);
+        let target_raw = path.to_string_lossy().trim_end_matches('/').to_string();
+        let target_canon = path.canonicalize().ok().map(|p| p.to_string_lossy().trim_end_matches('/').to_string());
+
+        projects.retain(|p| {
+            let p_raw = p.path.trim_end_matches('/');
+            let p_canon = Path::new(&p.path).canonicalize().ok().map(|p| p.to_string_lossy().trim_end_matches('/').to_string());
+
+            let matches_raw = p_raw == target_raw || p.path == target_raw || p.name == target_raw;
+            let matches_canon = match (&p_canon, &target_canon) {
+                (Some(a), Some(b)) => a == b,
+                _ => false,
+            };
+            let matches_cross = target_canon.as_deref() == Some(p_raw)
+                || p_canon.as_deref() == Some(target_raw.as_str());
+
+            !(matches_raw || matches_canon || matches_cross)
+        });
 
         if let Ok(json) = serde_json::to_string_pretty(&projects) {
             let _ = fs::write(&file_path, json);
