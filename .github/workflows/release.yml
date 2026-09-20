@@ -112,34 +112,7 @@ jobs:
             chmod +x "$APP_DIR/Contents/MacOS/devflow-gui"
             cp clients/tauri_app/src-tauri/icons/icon.icns "$APP_DIR/Contents/Resources/icon.icns" 2>/dev/null || true
             cp clients/tauri_app/src-tauri/icons/icon.png "$APP_DIR/Contents/Resources/icon.png" 2>/dev/null || true
-            cat << 'EOF' > "$APP_DIR/Contents/Info.plist"
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleExecutable</key>
-    <string>devflow-gui</string>
-    <key>CFBundleIconFile</key>
-    <string>icon.icns</string>
-    <key>CFBundleIdentifier</key>
-    <string>com.cmdworks.devflow</string>
-    <key>CFBundleName</key>
-    <string>DevFlow</string>
-    <key>CFBundleDisplayName</key>
-    <string>DevFlow</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>LSMinimumSystemVersion</key>
-    <string>10.13</string>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-</dict>
-</plist>
-EOF
+            cp clients/tauri_app/src-tauri/native/Info.plist "$APP_DIR/Contents/Info.plist"
             tar -czf dist/${{ matrix.gui_asset }} DevFlow.app
             rm -rf DevFlow.app
           else
