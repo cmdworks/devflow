@@ -43,6 +43,11 @@ struct AppState {
 #[cfg(target_os = "macos")]
 static MACOS_DIALOG_BIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/devflow-dialog-macos"));
 
+#[cfg(target_os = "macos")]
+extern "C" {
+    fn devflow_set_macos_dock_icon(bytes: *const u8, len: usize);
+}
+
 #[derive(Deserialize)]
 struct WorkspaceQuery {
     dir: Option<String>,
@@ -268,6 +273,23 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
             if let Ok(menu) = tauri::menu::Menu::default(app.handle()) {
                 let _ = app.set_menu(menu);
             }
+
+            // Set macOS Dock icon dynamically from embedded icon PNG
+            #[cfg(target_os = "macos")]
+            {
+                static ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
+                unsafe {
+                    devflow_set_macos_dock_icon(ICON_PNG.as_ptr(), ICON_PNG.len());
+                }
+            }
+
+            // Apply default window icon if available
+            if let Some(icon) = app.default_window_icon() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_icon(icon.clone());
+                }
+            }
+
             if let Some(window) = app.get_webview_window("main") {
                 if let Ok(parsed_url) = url_for_nav.parse() {
                     let _ = window.navigate(parsed_url);

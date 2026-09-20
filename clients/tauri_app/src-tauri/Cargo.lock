@@ -933,6 +933,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "axum",
+ "cc",
  "colored",
  "devflow_cli_core",
  "devflow_core",

@@ -1,9 +1,18 @@
 fn main() {
     println!("cargo:rerun-if-changed=native/devflow-dialog-macos.m");
+    println!("cargo:rerun-if-changed=native/devflow-macos.m");
     println!("cargo:rerun-if-changed=build.rs");
 
-    #[cfg(target_os = "macos")]
-    {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+
+    if target_os == "macos" {
+        // Compile helper static library for setting macOS dock icon
+        cc::Build::new()
+            .file("native/devflow-macos.m")
+            .flag("-fobjc-arc")
+            .compile("devflow_macos");
+        println!("cargo:rustc-link-lib=framework=Cocoa");
+
         let native_src = "native/devflow-dialog-macos.m";
         if std::path::Path::new(native_src).exists() {
             if let Ok(out_dir) = std::env::var("OUT_DIR") {
