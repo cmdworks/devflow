@@ -12,6 +12,7 @@ import { DoctorView } from "./components/DoctorView";
 import { McpView } from "./components/McpView";
 import { SettingsView } from "./components/SettingsView";
 import { WorkspaceModal } from "./components/WorkspaceModal";
+import { UpdateModal } from "./components/UpdateModal";
 import { ProcessStatusToast, type BatchProgressInfo } from "./components/ProcessStatusToast";
 import { DevServerOptionsModal, type RunnerOptionsConfig } from "./components/DevServerOptionsModal";
 import { useDevFlowApi } from "./hooks/useDevFlowApi";
@@ -27,6 +28,7 @@ import type {
   KnownWorkspace,
   ViewSection,
   WorkspaceResponse,
+  UpdateCheckResponse,
 } from "./types";
 
 interface WorkspaceCacheItem {
@@ -94,12 +96,56 @@ export const App: React.FC = () => {
   const [devOptionsModal, setDevOptionsModal] = useState<{ isOpen: boolean; targetId?: string }>({
     isOpen: false,
   });
-
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState<boolean>(false);
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResponse | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState<boolean>(false);
 
   // Batch Lifecycle Loading & Status Toast States
   const [isStartingAll, setIsStartingAll] = useState<boolean>(false);
   const [isStoppingAll, setIsStoppingAll] = useState<boolean>(false);
   const [batchProgress, setBatchProgress] = useState<BatchProgressInfo | null>(null);
+
+  // Auto-Updater handlers
+  const handleCheckUpdates = useCallback(async () => {
+    setIsCheckingUpdate(true);
+    try {
+      const info = await api.checkUpdate();
+      setUpdateInfo(info);
+      if (info.update_available) {
+        setIsUpdateModalOpen(true);
+      }
+    } catch (e) {
+      console.error("Failed to check for updates", e);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  }, [api]);
+
+  const handleInstallUpdate = useCallback(
+    async (downloadUrl: string) => {
+      return await api.installUpdate(downloadUrl);
+    },
+    [api]
+  );
+
+  const handleRestartApp = useCallback(async () => {
+    await api.restartApp();
+  }, [api]);
+
+  // Silent background update check on app launch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      api
+        .checkUpdate()
+        .then((info) => {
+          setUpdateInfo(info);
+        })
+        .catch((e) => {
+          console.debug("Background update check skipped:", e);
+        });
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [api]);
 
   // In-Memory Stateful Workspace Cache (Zero-flicker 0ms switching)
   const workspaceCacheRef = useRef<Record<string, WorkspaceCacheItem>>({});
@@ -889,6 +935,8 @@ export const App: React.FC = () => {
         onRestartAll={handleRestartAll}
         onStopAll={handleStopAll}
         onOpenDevOptions={() => setDevOptionsModal({ isOpen: true })}
+        updateAvailable={updateInfo}
+        onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
       />
 
       <div className="main-body">
@@ -1146,6 +1194,10 @@ export const App: React.FC = () => {
               }}
               onNavigateToMcp={() => setActiveSection("mcp")}
               workspacePath={workspacePath}
+              updateInfo={updateInfo}
+              isCheckingUpdate={isCheckingUpdate}
+              onCheckUpdates={handleCheckUpdates}
+              onOpenUpdateModal={() => setIsUpdateModalOpen(true)}
             />
           </div>
         </main>
@@ -1180,6 +1232,15 @@ export const App: React.FC = () => {
           handleSwitchWorkspace(path, immediateData);
           setIsWorkspaceModalOpen(false);
         }}
+      />
+
+      {/* 8. Integrated Software Update Modal */}
+      <UpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        updateInfo={updateInfo}
+        onInstallUpdate={handleInstallUpdate}
+        onRestartApp={handleRestartApp}
       />
     </div>
   );

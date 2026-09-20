@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import type { WorkspaceResponse, Device, DoctorReport } from "../types";
+import type { WorkspaceResponse, Device, DoctorReport, UpdateCheckResponse } from "../types";
 
 export interface FetchMcpLogsParams {
   limit?: number;
@@ -295,6 +295,30 @@ export function useDevFlowApi() {
     [apiBase]
   );
 
+  const checkUpdate = useCallback(async (): Promise<UpdateCheckResponse> => {
+    const res = await fetch(`${apiBase}/api/updater/check`);
+    return parseJsonResponse<UpdateCheckResponse>(res);
+  }, [apiBase]);
+
+  const installUpdate = useCallback(
+    async (downloadUrl: string): Promise<{ success: boolean; message?: string; error?: string }> => {
+      const res = await fetch(`${apiBase}/api/updater/install`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ download_url: downloadUrl }),
+      });
+      return parseJsonResponse<{ success: boolean; message?: string; error?: string }>(res);
+    },
+    [apiBase]
+  );
+
+  const restartApp = useCallback(async (): Promise<{ success: boolean; restarting: boolean }> => {
+    const res = await fetch(`${apiBase}/api/updater/restart`, {
+      method: "POST",
+    });
+    return parseJsonResponse<{ success: boolean; restarting: boolean }>(res);
+  }, [apiBase]);
+
   return useMemo(
     () => ({
       fetchWorkspace,
@@ -320,6 +344,9 @@ export function useDevFlowApi() {
       fetchMcpAgents,
       deleteMcpLog,
       clearMcpLogs,
+      checkUpdate,
+      installUpdate,
+      restartApp,
     }),
     [
       fetchWorkspace,
@@ -345,6 +372,9 @@ export function useDevFlowApi() {
       fetchMcpAgents,
       deleteMcpLog,
       clearMcpLogs,
+      checkUpdate,
+      installUpdate,
+      restartApp,
     ]
   );
 }

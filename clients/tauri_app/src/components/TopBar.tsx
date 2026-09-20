@@ -11,8 +11,9 @@ import {
   X,
   Loader2,
   Sliders,
+  Sparkles,
 } from "lucide-react";
-import type { ViewSection } from "../types";
+import type { ViewSection, UpdateCheckResponse } from "../types";
 
 interface TopBarProps {
   workspaceName: string;
@@ -27,6 +28,7 @@ interface TopBarProps {
   anyTargetRunning?: boolean;
   isStartingAll?: boolean;
   isStoppingAll?: boolean;
+  updateAvailable?: UpdateCheckResponse | null;
   onChangeSearch?: (query: string) => void;
   onSelectLevel?: (level: string) => void;
   onTogglePrimarySidebar: () => void;
@@ -37,6 +39,7 @@ interface TopBarProps {
   onRestartAll: () => void;
   onStopAll: () => void;
   onOpenDevOptions?: () => void;
+  onOpenUpdateModal?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -52,6 +55,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   anyTargetRunning = false,
   isStartingAll = false,
   isStoppingAll = false,
+  updateAvailable,
   onChangeSearch,
   onSelectLevel,
   onTogglePrimarySidebar,
@@ -62,6 +66,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRestartAll,
   onStopAll,
   onOpenDevOptions,
+  onOpenUpdateModal,
 }) => {
   const sectionLabelMap: Record<ViewSection, string> = {
     overview: "Overview",
@@ -100,6 +105,17 @@ export const TopBar: React.FC<TopBarProps> = ({
           <span className="brand-name">DevFlow</span>
           <span className="brand-badge">PRO</span>
         </div>
+
+        {updateAvailable?.update_available && onOpenUpdateModal && (
+          <button
+            className="topbar-update-badge"
+            onClick={onOpenUpdateModal}
+            title={`DevFlow v${updateAvailable.latest_version} available! Click to view update & release notes.`}
+          >
+            <Sparkles size={11} className="topbar-update-sparkle" />
+            <span>Update v{updateAvailable.latest_version}</span>
+          </button>
+        )}
 
         <div className="top-bar-breadcrumb">
           <span className="breadcrumb-sep">

@@ -187,3 +187,15 @@ export interface McpSessionDescriptor {
   last_tool?: string;
   last_timestamp: string;
 }
+
+export interface UpdateCheckResponse {
+  current_version: string;
+  latest_version: string;
+  update_available: boolean;
+  release_name: string;
+  release_notes: string;
+  published_at: string;
+  download_url?: string | null;
+  html_url: string;
+  target_platform: string;
+}

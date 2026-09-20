@@ -173,6 +173,36 @@ jobs:
           chmod +x ./scripts/update-readme-release.sh
           ./scripts/update-readme-release.sh "${{ steps.release_tag.outputs.tag }}"
 
+      - name: Generate and Upload latest.json Manifest
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          CLEAN_VER="${TAG#v}"
+          cat <<EOF > latest.json
+          {
+            "version": "${TAG}",
+            "notes": "DevFlow ${TAG} release",
+            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "platforms": {
+              "darwin-aarch64": {
+                "signature": "",
+                "url": "https://github.com/cmdworks/devflow/releases/download/${TAG}/devflow-gui-macos-arm64.tar.gz"
+              },
+              "darwin-x86_64": {
+                "signature": "",
+                "url": "https://github.com/cmdworks/devflow/releases/download/${TAG}/devflow-gui-macos-x86_64.tar.gz"
+              },
+              "linux-x86_64": {
+                "signature": "",
+                "url": "https://github.com/cmdworks/devflow/releases/download/${TAG}/devflow-gui-linux-x86_64.tar.gz"
+              }
+            }
+          }
+          EOF
+          gh release upload "$TAG" latest.json --clobber || true
+
       - name: Commit and Push Updated Readme
         shell: bash
         run: |

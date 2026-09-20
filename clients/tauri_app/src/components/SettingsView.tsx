@@ -5,13 +5,23 @@ import {
   Server,
   Bot,
   CheckCircle2,
+  Sparkles,
+  RefreshCw,
+  Download,
+  ShieldCheck,
+  Loader2,
 } from "lucide-react";
+import type { UpdateCheckResponse } from "../types";
 
 interface SettingsViewProps {
   onInstallCli: () => Promise<void>;
   onUninstallCli: () => Promise<void>;
   onNavigateToMcp: () => void;
   workspacePath: string;
+  updateInfo: UpdateCheckResponse | null;
+  isCheckingUpdate: boolean;
+  onCheckUpdates: () => Promise<void>;
+  onOpenUpdateModal: () => void;
 }
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
@@ -19,6 +29,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onUninstallCli,
   onNavigateToMcp,
   workspacePath,
+  updateInfo,
+  isCheckingUpdate,
+  onCheckUpdates,
+  onOpenUpdateModal,
 }) => {
   const [cliStatusMsg, setCliStatusMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -58,12 +72,98 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <span className="view-badge badge-slate">Preferences</span>
           </div>
           <p className="view-subtitle">
-            Configure system terminal PATH integration, inspect the local runtime engine, and manage developer tooling.
+            Configure system terminal PATH integration, inspect the local runtime engine, and manage updates.
           </p>
         </div>
       </div>
 
       <div className="settings-cards-grid">
+        {/* Card 0: Version & Auto-Updates */}
+        <div className="settings-card-large">
+          <div className="settings-card-header">
+            <div className="settings-card-title-group">
+              <Sparkles size={18} color="#38bdf8" />
+              <div>
+                <h3 className="settings-card-title">Version & Software Updates</h3>
+                <p className="settings-card-subtitle">
+                  Direct in-app release updates powered by GitHub Releases.
+                </p>
+              </div>
+            </div>
+            {updateInfo?.update_available ? (
+              <span className="badge-update-alert">
+                ✨ Update v{updateInfo.latest_version}
+              </span>
+            ) : (
+              <span className="badge-update-ok">
+                <ShieldCheck size={12} /> Up to Date
+              </span>
+            )}
+          </div>
+
+          <div className="settings-card-body">
+            <div className="settings-meta-table">
+              <div className="settings-meta-row">
+                <span className="meta-label">Installed Version</span>
+                <span className="meta-val font-mono">
+                  v{updateInfo?.current_version || "0.1.0"}
+                </span>
+              </div>
+              <div className="settings-meta-row">
+                <span className="meta-label">Latest Available</span>
+                <span className="meta-val font-mono">
+                  v{updateInfo?.latest_version || updateInfo?.current_version || "0.1.0"}
+                  {updateInfo?.update_available && (
+                    <span style={{ color: "#38bdf8", marginLeft: "8px", fontWeight: 600 }}>
+                      (New Version Ready)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="settings-meta-row">
+                <span className="meta-label">Update Channel</span>
+                <span className="meta-val font-mono">GitHub Releases (cmdworks/devflow)</span>
+              </div>
+              {updateInfo?.target_platform && (
+                <div className="settings-meta-row">
+                  <span className="meta-label">Platform Architecture</span>
+                  <span className="meta-val font-mono">{updateInfo.target_platform}</span>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-btn-row">
+              <button
+                className="btn-glass"
+                onClick={onCheckUpdates}
+                disabled={isCheckingUpdate}
+                title="Check GitHub Releases for new updates"
+              >
+                {isCheckingUpdate ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={14} />
+                )}
+                <span>{isCheckingUpdate ? "Checking Releases..." : "Check for Updates"}</span>
+              </button>
+
+              {updateInfo?.update_available && (
+                <button
+                  className="btn-primary"
+                  onClick={onOpenUpdateModal}
+                  style={{
+                    background: "linear-gradient(135deg, #0284c7, #38bdf8)",
+                    boxShadow: "0 0 15px rgba(56, 189, 248, 0.3)",
+                  }}
+                >
+                  <Download size={14} />
+                  <span>View Update & Install</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Card 1: Shell CLI PATH Integration */}
         <div className="settings-card-large">
           <div className="settings-card-header">
