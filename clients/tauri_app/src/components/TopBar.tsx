@@ -96,7 +96,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         </div>
 
         <div className="app-brand" onClick={() => onSelectSection("overview")} style={{ cursor: "pointer" }}>
-          <img src="/icon.svg" alt="DevFlow" style={{ width: "16px", height: "16px", objectFit: "contain" }} />
+          <img src="/image/logo/icon.svg" alt="DevFlow" style={{ width: "16px", height: "16px", objectFit: "contain" }} />
           <span className="brand-name">DevFlow</span>
           <span className="brand-badge">PRO</span>
         </div>
