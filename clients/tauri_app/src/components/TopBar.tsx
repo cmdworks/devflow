@@ -5,10 +5,7 @@ import {
   Zap,
   RotateCw,
   Square,
-  Activity,
-  Smartphone,
   ChevronRight,
-  Settings,
   PanelLeft,
   Sidebar as SidebarIcon,
   Search,
@@ -16,12 +13,11 @@ import {
   Loader2,
   Sliders,
 } from "lucide-react";
-import type { ViewSection, Device } from "../types";
+import type { ViewSection } from "../types";
 
 interface TopBarProps {
   workspaceName: string;
   activeSection: ViewSection;
-  devices: Device[];
   isPrimarySidebarCollapsed: boolean;
   isSecondarySidebarCollapsed: boolean;
   searchQuery?: string;
@@ -42,13 +38,11 @@ interface TopBarProps {
   onRestartAll: () => void;
   onStopAll: () => void;
   onOpenDevOptions?: () => void;
-  onOpenSettings: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   workspaceName,
   activeSection,
-  devices,
   isPrimarySidebarCollapsed,
   isSecondarySidebarCollapsed,
   searchQuery = "",
@@ -69,18 +63,14 @@ export const TopBar: React.FC<TopBarProps> = ({
   onRestartAll,
   onStopAll,
   onOpenDevOptions,
-  onOpenSettings,
 }) => {
-  const onlineDevicesCount = devices.filter(
-    (d) => d.online || d.state === "device" || d.state === "booted"
-  ).length;
-
   const sectionLabelMap: Record<ViewSection, string> = {
     overview: "Overview",
     targets: "Targets & Matrix",
     terminal: "Terminal Logs",
     devices: "Devices & Emulators",
     doctor: "Doctor Diagnostics",
+    mcp: "MCP Hub",
     settings: "Settings",
   };
 
@@ -208,10 +198,9 @@ export const TopBar: React.FC<TopBarProps> = ({
         )}
       </div>
 
-      {/* 3. Right: System & Tool Status Pills */}
+      {/* 3. Right: Terminal Log Search & Level Filters */}
       <div className="top-bar-right">
-        {/* Terminal Log Search & Level Filter (Shown when in Terminal section) */}
-        {activeSection === "terminal" && onChangeSearch && onSelectLevel && (
+        {activeSection === "terminal" && onChangeSearch && onSelectLevel ? (
           <div className="top-bar-search-group">
             <div className="top-bar-search-box">
               <Search size={11} color="var(--text-muted)" />
@@ -254,42 +243,14 @@ export const TopBar: React.FC<TopBarProps> = ({
                 );
               })}
             </div>
-
-            <div className="top-bar-divider" />
+          </div>
+        ) : (
+          <div className="top-bar-meta-hint">
+            <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>
+              {targetsCount} Target{targetsCount === 1 ? "" : "s"} Discovered
+            </span>
           </div>
         )}
-
-        {/* Device Status Pill */}
-        <button
-          className={`top-status-pill ${activeSection === "devices" ? "active" : ""}`}
-          onClick={() => onSelectSection("devices")}
-          title="View Connected Devices & AVD Launcher"
-        >
-          <Smartphone size={12} color="#38bdf8" />
-          <span>{onlineDevicesCount} Device{onlineDevicesCount === 1 ? "" : "s"}</span>
-          <span className={`pulse-dot ${onlineDevicesCount > 0 ? "green" : "yellow"}`} />
-        </button>
-
-        {/* Doctor Status Pill */}
-        <button
-          className={`top-status-pill ${activeSection === "doctor" ? "active" : ""}`}
-          onClick={() => onSelectSection("doctor")}
-          title="View Toolchain Health Diagnostics"
-        >
-          <Activity size={12} color="#10b981" />
-          <span>Doctor</span>
-        </button>
-
-        <div className="top-bar-divider" />
-
-        {/* Settings Action */}
-        <button
-          className="btn-icon-top"
-          onClick={onOpenSettings}
-          title="DevFlow Preferences & CLI Setup"
-        >
-          <Settings size={14} />
-        </button>
       </div>
     </header>
   );

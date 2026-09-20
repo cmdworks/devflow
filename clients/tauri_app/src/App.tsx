@@ -9,8 +9,9 @@ import { WorkspaceOverviewView } from "./components/WorkspaceOverviewView";
 import { TargetsView } from "./components/TargetsView";
 import { DevicesView } from "./components/DevicesView";
 import { DoctorView } from "./components/DoctorView";
+import { McpView } from "./components/McpView";
+import { SettingsView } from "./components/SettingsView";
 import { WorkspaceModal } from "./components/WorkspaceModal";
-import { SettingsModal } from "./components/SettingsModal";
 import { ProcessStatusToast, type BatchProgressInfo } from "./components/ProcessStatusToast";
 import { DevServerOptionsModal, type RunnerOptionsConfig } from "./components/DevServerOptionsModal";
 import { useDevFlowApi } from "./hooks/useDevFlowApi";
@@ -90,10 +91,10 @@ export const App: React.FC = () => {
 
   // Modal States
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState<boolean>(false);
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [devOptionsModal, setDevOptionsModal] = useState<{ isOpen: boolean; targetId?: string }>({
     isOpen: false,
   });
+
 
   // Batch Lifecycle Loading & Status Toast States
   const [isStartingAll, setIsStartingAll] = useState<boolean>(false);
@@ -131,6 +132,12 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem("devflow_custom_workspace_names", JSON.stringify(customNames));
+    setKnownWorkspaces((prev) =>
+      prev.map((w) => ({
+        ...w,
+        custom_name: customNames[w.path] || w.name,
+      }))
+    );
   }, [customNames]);
 
   // Load known workspaces once at startup
@@ -138,20 +145,22 @@ export const App: React.FC = () => {
     try {
       const list = await api.fetchWorkspaces();
       if (list && Array.isArray(list)) {
-        const enriched = list.map((w) => ({
-          ...w,
-          custom_name: customNames[w.path] || w.name,
-        }));
-        setKnownWorkspaces(enriched);
+        setKnownWorkspaces(
+          list.map((w) => ({
+            ...w,
+            custom_name: customNames[w.path] || w.name,
+          }))
+        );
       }
     } catch (err) {
       console.error("Failed to load known workspaces:", err);
     }
-  }, [api, customNames]);
+  }, [api.fetchWorkspaces, customNames]);
 
   useEffect(() => {
     loadKnownWorkspaces();
-  }, [loadKnownWorkspaces]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Append a log entry to a specific pane
   const appendLogToPane = useCallback((paneId: string, entry: LogEntry) => {
@@ -860,7 +869,6 @@ export const App: React.FC = () => {
       <TopBar
         workspaceName={workspaceName}
         activeSection={activeSection}
-        devices={devices}
         isPrimarySidebarCollapsed={isPrimarySidebarCollapsed}
         isSecondarySidebarCollapsed={isSecondarySidebarCollapsed}
         searchQuery={searchQuery}
@@ -881,7 +889,6 @@ export const App: React.FC = () => {
         onRestartAll={handleRestartAll}
         onStopAll={handleStopAll}
         onOpenDevOptions={() => setDevOptionsModal({ isOpen: true })}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
       />
 
       <div className="main-body">
@@ -898,7 +905,6 @@ export const App: React.FC = () => {
           onSelectSection={setActiveSection}
           onRenameWorkspace={handleRenameWorkspace}
           onRemoveWorkspace={handleRemoveWorkspace}
-          onOpenSettings={() => setIsSettingsModalOpen(true)}
         />
 
         {/* 3. Secondary Sidebar (Active Workspace Sub-Navigation) */}
@@ -1097,6 +1103,51 @@ export const App: React.FC = () => {
               onRefreshDoctor={handleRefreshDoctor}
             />
           </div>
+
+          {/* Model Context Protocol (MCP) Hub Tab */}
+          <div
+            className={`viewport-view-container ${activeSection === "mcp" ? "active" : "hidden"}`}
+            style={{
+              display: activeSection === "mcp" ? "block" : "none",
+              height: "100%",
+              width: "100%",
+              overflowY: "auto",
+            }}
+          >
+            <McpView
+              onFetchStatus={api.fetchMcpStatus}
+              onToggleServer={api.toggleMcpServer}
+              onFetchLogs={api.fetchMcpLogs}
+              onFetchSessions={api.fetchMcpSessions}
+              onFetchAgents={api.fetchMcpAgents}
+              onDeleteLog={api.deleteMcpLog}
+              onClearLogs={api.clearMcpLogs}
+            />
+          </div>
+
+          {/* Settings & System Environment Tab */}
+          <div
+            className={`viewport-view-container ${activeSection === "settings" ? "active" : "hidden"}`}
+            style={{
+              display: activeSection === "settings" ? "block" : "none",
+              height: "100%",
+              width: "100%",
+              overflowY: "auto",
+            }}
+          >
+            <SettingsView
+              onInstallCli={async () => {
+                const res = await api.installShellCli();
+                if (!res.success) throw new Error(res.error);
+              }}
+              onUninstallCli={async () => {
+                const res = await api.uninstallShellCli();
+                if (!res.success) throw new Error(res.error);
+              }}
+              onNavigateToMcp={() => setActiveSection("mcp")}
+              workspacePath={workspacePath}
+            />
+          </div>
         </main>
       </div>
 
@@ -1130,22 +1181,9 @@ export const App: React.FC = () => {
           setIsWorkspaceModalOpen(false);
         }}
       />
-
-      {/* 8. Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        onInstallCli={async () => {
-          const res = await api.installShellCli();
-          if (!res.success) throw new Error(res.error);
-        }}
-        onUninstallCli={async () => {
-          const res = await api.uninstallShellCli();
-          if (!res.success) throw new Error(res.error);
-        }}
-      />
     </div>
   );
 };
+
 
 export default App;

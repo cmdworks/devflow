@@ -16,6 +16,7 @@ use devflow_core::project::{Project, ProjectTarget};
 use devflow_core::registry::{GlobalRegistry, KnownProject};
 use devflow_devices::DeviceManager;
 use devflow_frameworks::session::SessionManager;
+use devflow_mcp::{get_tool_definitions, McpHandler};
 use devflow_protocol::{Device, DoctorReport, Platform};
 use devflow_tui::TuiRunner;
 use futures_util::stream::Stream;
@@ -24,6 +25,7 @@ use std::collections::HashMap;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
 use tokio::sync::{broadcast, Mutex};
 use tower_http::cors::CorsLayer;
@@ -33,6 +35,9 @@ use tracing::{info, warn};
 struct AppState {
     event_bus: EventBus,
     active_sessions: Arc<Mutex<HashMap<String, Arc<SessionManager>>>>,
+    mcp_handler: Arc<McpHandler>,
+    mcp_enabled: Arc<AtomicBool>,
+    actual_port: Arc<AtomicU16>,
 }
 
 #[cfg(target_os = "macos")]
@@ -140,9 +145,16 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
             .expect("Failed to create background Tokio runtime");
         rt.block_on(async move {
             let event_bus = EventBus::new(2000);
+            let mcp_handler = Arc::new(McpHandler::new().with_event_bus(event_bus.clone()));
+            let mcp_enabled = Arc::new(AtomicBool::new(true));
+            let actual_port_holder = Arc::new(AtomicU16::new(base_port));
+
             let state = AppState {
                 event_bus,
                 active_sessions: Arc::new(Mutex::new(HashMap::new())),
+                mcp_handler,
+                mcp_enabled,
+                actual_port: actual_port_holder.clone(),
             };
 
             let cors = CorsLayer::permissive();
@@ -158,6 +170,12 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 .route("/api/devices", get(handle_devices))
                 .route("/api/devices/boot", post(handle_boot_emulator))
                 .route("/api/doctor", get(handle_doctor))
+                .route("/api/mcp/status", get(handle_mcp_status))
+                .route("/api/mcp/toggle", post(handle_mcp_toggle))
+                .route("/api/mcp/logs", get(handle_mcp_logs).delete(handle_delete_mcp_logs))
+                .route("/api/mcp/sessions", get(handle_mcp_sessions))
+                .route("/api/mcp/agents", get(handle_mcp_agents))
+                .route("/rpc", post(handle_mcp_rpc))
                 .route("/api/shell/install", post(handle_shell_install))
                 .route("/api/shell/uninstall", post(handle_shell_uninstall))
                 .route("/api/target/start", post(handle_start_target))
@@ -169,8 +187,20 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 .route("/api/dialog/pick-folder", post(handle_pick_folder))
                 .route("/api/events", get(handle_events_sse))
                 .route("/", get(index_handler))
-                .route("/{*path}", get(static_handler))
+                .fallback(fallback_handler)
                 .layer(cors)
+                .layer(axum::middleware::from_fn(|req: axum::extract::Request, next: axum::middleware::Next| async move {
+                    let method = req.method().clone();
+                    let uri = req.uri().clone();
+                    let response = next.run(req).await;
+                    let status = response.status();
+                    if status.is_server_error() || status.is_client_error() {
+                        warn!("HTTP {} {} -> {}", method, uri, status);
+                    } else {
+                        info!("HTTP {} {} -> {}", method, uri, status);
+                    }
+                    response
+                }))
                 .with_state(state);
 
             // Attempt to bind starting from base_port up to base_port + 20
@@ -183,6 +213,7 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
                 match tokio::net::TcpListener::bind(addr).await {
                     Ok(listener) => {
                         actual_port = candidate_port;
+                        actual_port_holder.store(actual_port, Ordering::Relaxed);
                         bound_listener = Some((listener, addr));
                         break;
                     }
@@ -214,7 +245,12 @@ fn run_desktop_app(workspace_dir: PathBuf, base_port: u16, open_browser: bool) -
         Err(e) => return Err(anyhow::anyhow!("Failed to initialize backend thread: {}", e)),
     };
 
-    let url_str = format!("http://localhost:{}?dir={}", bound_port, urlencoding_simple(&workspace_dir.display().to_string()));
+    let url_str = format!(
+        "http://localhost:{}?dir={}&port={}",
+        bound_port,
+        urlencoding_simple(&workspace_dir.display().to_string()),
+        bound_port
+    );
     let url_for_nav = url_str.clone();
 
     println!("\n{}", "═══ DevFlow Desktop Companion App ═══".cyan().bold());
@@ -257,12 +293,35 @@ async fn index_handler() -> impl IntoResponse {
     serve_asset("index.html")
 }
 
-async fn static_handler(axum::extract::Path(path): axum::extract::Path<String>) -> impl IntoResponse {
+async fn fallback_handler(req: axum::extract::Request) -> axum::response::Response {
+    let path = req.uri().path().to_string();
+    let method = req.method().clone();
+
+    // If an API or RPC endpoint was requested but not matched, return 404 JSON (never HTML!)
+    if path.starts_with("/api/") || path == "/rpc" {
+        warn!("API route not found: {} {}", method, path);
+        return (
+            StatusCode::NOT_FOUND,
+            [(axum::http::header::CONTENT_TYPE, "application/json")],
+            serde_json::json!({
+                "error": format!("API route not found: {} {}", method, path)
+            })
+            .to_string(),
+        )
+            .into_response();
+    }
+
+    // Static assets only respond to GET and HEAD
+    if method != axum::http::Method::GET && method != axum::http::Method::HEAD {
+        warn!("Method not allowed for static asset: {} {}", method, path);
+        return (StatusCode::METHOD_NOT_ALLOWED, "Method Not Allowed").into_response();
+    }
+
     let clean_path = path.trim_start_matches('/');
     serve_asset(clean_path)
 }
 
-fn serve_asset(path: &str) -> impl IntoResponse {
+fn serve_asset(path: &str) -> axum::response::Response {
     let asset_path = if path.is_empty() { "index.html" } else { path };
 
     match FrontendAssets::get(asset_path) {
@@ -593,7 +652,7 @@ async fn handle_reload_all(
     State(state): State<AppState>,
 ) -> Json<serde_json::Value> {
     let sessions = state.active_sessions.lock().await;
-    for (_id, sess) in sessions.iter() {
+    for sess in sessions.values() {
         let _ = sess.reload(vec![]).await;
     }
     Json(serde_json::json!({ "success": true, "message": format!("Reloaded {} active targets", sessions.len()) }))
@@ -603,7 +662,7 @@ async fn handle_restart_all(
     State(state): State<AppState>,
 ) -> Json<serde_json::Value> {
     let sessions = state.active_sessions.lock().await;
-    for (_id, sess) in sessions.iter() {
+    for sess in sessions.values() {
         let _ = sess.restart().await;
     }
     Json(serde_json::json!({ "success": true, "message": format!("Restarted {} active targets", sessions.len()) }))
@@ -637,13 +696,15 @@ async fn handle_pick_folder() -> Json<serde_json::Value> {
         let res = tokio::task::spawn_blocking(|| -> Result<String, anyhow::Error> {
             // 1. Ensure /tmp/devflow-dialog-macos binary exists and has execute permissions
             let tmp_bin = PathBuf::from("/tmp/devflow-dialog-macos");
-            if !tmp_bin.exists() && !MACOS_DIALOG_BIN.is_empty() {
-                if let Ok(_) = std::fs::write(&tmp_bin, MACOS_DIALOG_BIN) {
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::PermissionsExt;
-                        let _ = std::fs::set_permissions(&tmp_bin, std::fs::Permissions::from_mode(0o755));
-                    }
+            if !tmp_bin.exists()
+                && !MACOS_DIALOG_BIN.is_empty()
+                && std::fs::write(&tmp_bin, MACOS_DIALOG_BIN).is_ok()
+            {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ =
+                        std::fs::set_permissions(&tmp_bin, std::fs::Permissions::from_mode(0o755));
                 }
             }
 
@@ -702,7 +763,7 @@ async fn handle_pick_folder() -> Json<serde_json::Value> {
                 return Json(serde_json::json!({ "success": true, "path": path_str }));
             }
         }
-        return Json(serde_json::json!({ "success": false }));
+        Json(serde_json::json!({ "success": false }))
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -718,4 +779,170 @@ async fn handle_pick_folder() -> Json<serde_json::Value> {
         Json(serde_json::json!({ "success": false }))
     }
 }
+
+#[derive(Serialize)]
+struct McpStatusResponse {
+    enabled: bool,
+    http_endpoint: String,
+    port: u16,
+    tools_count: usize,
+    tools: Vec<serde_json::Value>,
+    configs: McpClientConfigs,
+}
+
+#[derive(Serialize)]
+struct McpClientConfigs {
+    claude_desktop: serde_json::Value,
+    cursor: serde_json::Value,
+    antigravity: serde_json::Value,
+    vscode: serde_json::Value,
+}
+
+#[derive(Deserialize)]
+struct McpToggleRequest {
+    enabled: bool,
+}
+
+async fn handle_mcp_status(State(state): State<AppState>) -> Json<McpStatusResponse> {
+    let enabled = state.mcp_enabled.load(Ordering::Relaxed);
+    let port = state.actual_port.load(Ordering::Relaxed);
+    let endpoint = format!("http://localhost:{}/rpc", port);
+    let tools = get_tool_definitions();
+    let tools_count = tools.len();
+
+    let configs = McpClientConfigs {
+        claude_desktop: serde_json::json!({
+            "mcpServers": {
+                "devflow": {
+                    "command": "devflow",
+                    "args": ["mcp", "serve"]
+                }
+            }
+        }),
+        cursor: serde_json::json!({
+            "mcpServers": {
+                "devflow": {
+                    "url": endpoint
+                }
+            }
+        }),
+        antigravity: serde_json::json!({
+            "mcpServers": {
+                "devflow": {
+                    "command": "devflow",
+                    "args": ["mcp", "serve"]
+                }
+            }
+        }),
+        vscode: serde_json::json!({
+            "servers": {
+                "devflow": {
+                    "type": "http",
+                    "url": endpoint
+                }
+            }
+        }),
+    };
+
+    Json(McpStatusResponse {
+        enabled,
+        http_endpoint: endpoint,
+        port,
+        tools_count,
+        tools,
+        configs,
+    })
+}
+
+async fn handle_mcp_toggle(
+    State(state): State<AppState>,
+    Json(req): Json<McpToggleRequest>,
+) -> Json<serde_json::Value> {
+    state.mcp_enabled.store(req.enabled, Ordering::Relaxed);
+    info!("DevFlow MCP server toggle: enabled={}", req.enabled);
+    Json(serde_json::json!({ "success": true, "enabled": req.enabled }))
+}
+
+#[derive(Deserialize)]
+struct McpLogsQuery {
+    limit: Option<usize>,
+    offset: Option<usize>,
+    session_id: Option<String>,
+    client: Option<String>,
+    agent: Option<String>,
+    tool_name: Option<String>,
+    status: Option<String>,
+    search: Option<String>,
+}
+
+async fn handle_mcp_logs(
+    State(state): State<AppState>,
+    Query(query): Query<McpLogsQuery>,
+) -> Json<Vec<devflow_mcp::McpAccessLogEntry>> {
+    let filter = devflow_mcp::McpLogFilter {
+        limit: query.limit.or(Some(100)),
+        offset: query.offset,
+        session_id: query.session_id,
+        client: query.client.or(query.agent),
+        tool_name: query.tool_name,
+        status: query.status,
+        search: query.search,
+    };
+    let logs = state.mcp_handler.query_access_logs(&filter);
+    Json(logs)
+}
+
+async fn handle_mcp_sessions(
+    State(state): State<AppState>,
+) -> Json<Vec<devflow_mcp::McpSessionDescriptor>> {
+    let sessions = state.mcp_handler.get_access_log_descriptors();
+    Json(sessions)
+}
+
+async fn handle_mcp_agents(
+    State(state): State<AppState>,
+) -> Json<Vec<String>> {
+    let agents = state.mcp_handler.get_access_log_clients();
+    Json(agents)
+}
+
+#[derive(Deserialize)]
+struct DeleteMcpLogsQuery {
+    id: Option<String>,
+    session_id: Option<String>,
+}
+
+async fn handle_delete_mcp_logs(
+    State(state): State<AppState>,
+    Query(query): Query<DeleteMcpLogsQuery>,
+) -> Json<serde_json::Value> {
+    if let Some(ref id) = query.id {
+        let deleted = state.mcp_handler.delete_access_log(id);
+        Json(serde_json::json!({ "success": deleted, "deleted_id": id }))
+    } else if let Some(ref session_id) = query.session_id {
+        let count = state.mcp_handler.delete_access_logs_by_session(session_id);
+        Json(serde_json::json!({ "success": true, "deleted_count": count, "session_id": session_id }))
+    } else {
+        state.mcp_handler.clear_access_logs();
+        Json(serde_json::json!({ "success": true, "cleared_all": true }))
+    }
+}
+
+async fn handle_mcp_rpc(
+    State(state): State<AppState>,
+    Json(req): Json<devflow_protocol::JsonRpcRequest>,
+) -> Result<Json<devflow_protocol::JsonRpcResponse>, StatusCode> {
+    if !state.mcp_enabled.load(Ordering::Relaxed) {
+        let resp = devflow_protocol::JsonRpcResponse::error(
+            req.id,
+            -32000,
+            "DevFlow MCP server is currently disabled in companion app".to_string(),
+            None,
+        );
+        return Ok(Json(resp));
+    }
+    let resp = state.mcp_handler.handle_request(req).await;
+    Ok(Json(resp))
+}
+
 

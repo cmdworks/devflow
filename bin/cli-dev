@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# DevFlow CLI-Dev — development build wrapper
+# Always checks cargo incremental build (<0.1s when up to date) and runs debug binary.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+DEBUG_BIN="$DEVFLOW_WORKSPACE_ROOT/target/debug/devflow"
+
+cargo build --manifest-path "$REPO_ROOT/Cargo.toml" -p devflow_cli >&2
+
+exec "$DEBUG_BIN" "$@"

@@ -117,7 +117,10 @@ impl TuiApp {
         let known_projects = GlobalRegistry::list_projects();
         let devices = DeviceManager::discover_all().await;
 
-        let target_states = targets.iter().map(|t| TargetSessionState::new(t.clone())).collect();
+        let target_states = targets
+            .iter()
+            .map(|t| TargetSessionState::new(t.clone()))
+            .collect();
 
         let initial_focus = if !targets.is_empty() {
             HubFocus::Targets
@@ -158,10 +161,15 @@ impl TuiApp {
         let dir = session.project.root_dir.clone();
         let targets = Project::discover_workspace_targets(&dir);
 
-        let mut target_states: Vec<TargetSessionState> = targets.iter().map(|t| TargetSessionState::new(t.clone())).collect();
+        let mut target_states: Vec<TargetSessionState> = targets
+            .iter()
+            .map(|t| TargetSessionState::new(t.clone()))
+            .collect();
 
         // Attach the passed session to matching target or create target state
-        if let Some(state) = target_states.iter_mut().find(|s| s.target.name == session.project.name || s.target.path == session.project.root_dir) {
+        if let Some(state) = target_states.iter_mut().find(|s| {
+            s.target.name == session.project.name || s.target.path == session.project.root_dir
+        }) {
             state.session = Some(session.clone());
             state.status = TargetStatus::Running;
             state.logs = VecDeque::from(session.get_logs(&LogFilter::default()));
@@ -198,7 +206,11 @@ impl TuiApp {
 
     /// Handle an event received from a specific target's session event bus
     pub fn handle_target_event(&mut self, target_idx: usize, event: DevflowEvent) {
-        let target_name = self.target_states.get(target_idx).map(|s| s.target.name.clone()).unwrap_or_else(|| format!("target-{}", target_idx));
+        let target_name = self
+            .target_states
+            .get(target_idx)
+            .map(|s| s.target.name.clone())
+            .unwrap_or_else(|| format!("target-{}", target_idx));
 
         match event {
             DevflowEvent::LogAppended { entry, .. } => {
@@ -250,26 +262,41 @@ impl TuiApp {
                         state.status = TargetStatus::Running;
                         state.last_error = None;
                     } else {
-                        state.status = TargetStatus::Error(result.error_message.unwrap_or_else(|| "Build failed".to_string()));
+                        state.status = TargetStatus::Error(
+                            result
+                                .error_message
+                                .unwrap_or_else(|| "Build failed".to_string()),
+                        );
                     }
                 }
             }
-            DevflowEvent::SessionStateChanged { status, state: sess_state, .. } => {
+            DevflowEvent::SessionStateChanged {
+                status,
+                state: sess_state,
+                ..
+            } => {
                 if let Some(state) = self.target_states.get_mut(target_idx) {
                     state.status = match status {
-                        devflow_protocol::SessionStatus::Building | devflow_protocol::SessionStatus::Installing | devflow_protocol::SessionStatus::Launching => TargetStatus::Building,
+                        devflow_protocol::SessionStatus::Building
+                        | devflow_protocol::SessionStatus::Installing
+                        | devflow_protocol::SessionStatus::Launching => TargetStatus::Building,
                         devflow_protocol::SessionStatus::Running => TargetStatus::Running,
-                        devflow_protocol::SessionStatus::Failed => TargetStatus::Error(sess_state.last_error.clone().unwrap_or_else(|| "Failed".to_string())),
+                        devflow_protocol::SessionStatus::Failed => TargetStatus::Error(
+                            sess_state
+                                .last_error
+                                .clone()
+                                .unwrap_or_else(|| "Failed".to_string()),
+                        ),
                         devflow_protocol::SessionStatus::Stopped => TargetStatus::Stopped,
                         _ => TargetStatus::Idle,
                     };
                     state.last_error = sess_state.last_error;
                 }
             }
-            DevflowEvent::DeviceDiscovered { device } => {
-                if !self.devices.iter().any(|d| d.id == device.id) {
-                    self.devices.push(device);
-                }
+            DevflowEvent::DeviceDiscovered { device }
+                if !self.devices.iter().any(|d| d.id == device.id) =>
+            {
+                self.devices.push(device);
             }
             _ => {}
         }
@@ -280,10 +307,13 @@ impl TuiApp {
         self.active_sessions = GlobalRegistry::list_active_sessions();
         self.known_projects = GlobalRegistry::list_projects();
 
-        if self.selected_session_idx >= self.active_sessions.len() && !self.active_sessions.is_empty() {
+        if self.selected_session_idx >= self.active_sessions.len()
+            && !self.active_sessions.is_empty()
+        {
             self.selected_session_idx = self.active_sessions.len() - 1;
         }
-        if self.selected_project_idx >= self.known_projects.len() && !self.known_projects.is_empty() {
+        if self.selected_project_idx >= self.known_projects.len() && !self.known_projects.is_empty()
+        {
             self.selected_project_idx = self.known_projects.len() - 1;
         }
         if self.selected_target_idx >= self.targets.len() && !self.targets.is_empty() {
@@ -320,22 +350,39 @@ impl TuiApp {
     }
 
     /// Start target session by index with platform-aware device pairing
-    pub async fn start_target(&mut self, idx: usize) -> Result<tokio::sync::broadcast::Receiver<DevflowEvent>, String> {
+    pub async fn start_target(
+        &mut self,
+        idx: usize,
+    ) -> Result<tokio::sync::broadcast::Receiver<DevflowEvent>, String> {
         let Some(state) = self.target_states.get_mut(idx) else {
             return Err("Invalid target index".to_string());
         };
 
         // Find best device matching target platform
         let target_platform = state.target.platform;
-        let matched_device = self.devices.iter().find(|d| {
-            let is_available = matches!(d.state, devflow_protocol::DeviceState::Connected | devflow_protocol::DeviceState::Booted);
-            is_available && match target_platform {
-                Platform::Android => d.platform == Platform::Android,
-                Platform::Apple | Platform::Macos | Platform::Ios => d.platform == Platform::Apple || d.platform == Platform::Desktop || d.platform == Platform::Macos,
-                Platform::Desktop => d.platform == Platform::Desktop,
-                _ => true,
-            }
-        }).or_else(|| self.devices.first()).cloned();
+        let matched_device = self
+            .devices
+            .iter()
+            .find(|d| {
+                let is_available = matches!(
+                    d.state,
+                    devflow_protocol::DeviceState::Connected
+                        | devflow_protocol::DeviceState::Booted
+                );
+                is_available
+                    && match target_platform {
+                        Platform::Android => d.platform == Platform::Android,
+                        Platform::Apple | Platform::Macos | Platform::Ios => {
+                            d.platform == Platform::Apple
+                                || d.platform == Platform::Desktop
+                                || d.platform == Platform::Macos
+                        }
+                        Platform::Desktop => d.platform == Platform::Desktop,
+                        _ => true,
+                    }
+            })
+            .or_else(|| self.devices.first())
+            .cloned();
 
         state.assigned_device = matched_device.clone();
         let target_device_id = matched_device.map(|d| d.id);
@@ -344,7 +391,14 @@ impl TuiApp {
 
         state.status = TargetStatus::Building;
 
-        match SessionManager::create(&state.target.path, target_device_id.as_deref(), Some(&state.target.framework), event_bus).await {
+        match SessionManager::create(
+            &state.target.path,
+            target_device_id.as_deref(),
+            Some(&state.target.framework),
+            event_bus,
+        )
+        .await
+        {
             Ok(sess) => {
                 let sess_arc = Arc::new(sess);
                 let sess_clone = sess_arc.clone();
@@ -353,19 +407,25 @@ impl TuiApp {
                 });
 
                 state.session = Some(sess_arc);
-                self.status_message = Some(format!("Started live dev session for '{}'", state.target.name));
+                self.status_message = Some(format!(
+                    "Started live dev session for '{}'",
+                    state.target.name
+                ));
                 Ok(rx)
             }
             Err(e) => {
                 state.status = TargetStatus::Error(e.to_string());
-                self.status_message = Some(format!("Failed to start '{}': {}", state.target.name, e));
+                self.status_message =
+                    Some(format!("Failed to start '{}': {}", state.target.name, e));
                 Err(e.to_string())
             }
         }
     }
 
     /// Start selected target from Hub view and transition to Session mode
-    pub async fn start_selected_target(&mut self) -> Result<(usize, tokio::sync::broadcast::Receiver<DevflowEvent>), String> {
+    pub async fn start_selected_target(
+        &mut self,
+    ) -> Result<(usize, tokio::sync::broadcast::Receiver<DevflowEvent>), String> {
         let idx = self.selected_target_idx;
         let rx = self.start_target(idx).await?;
         self.mode = AppMode::Session;
@@ -374,7 +434,9 @@ impl TuiApp {
     }
 
     /// Start ALL targets in parallel (e.g. run both Mac app and Android companion)
-    pub async fn start_all_targets(&mut self) -> Vec<(usize, tokio::sync::broadcast::Receiver<DevflowEvent>)> {
+    pub async fn start_all_targets(
+        &mut self,
+    ) -> Vec<(usize, tokio::sync::broadcast::Receiver<DevflowEvent>)> {
         let mut launched = Vec::new();
         for idx in 0..self.target_states.len() {
             if self.target_states[idx].session.is_none() {
@@ -384,7 +446,10 @@ impl TuiApp {
             }
         }
         self.mode = AppMode::Session;
-        self.status_message = Some(format!("Running all {} workspace targets", self.target_states.len()));
+        self.status_message = Some(format!(
+            "Running all {} workspace targets",
+            self.target_states.len()
+        ));
         launched
     }
 
@@ -428,7 +493,9 @@ impl TuiApp {
                 self.status_message = Some("Sent reload to all targets".to_string());
             }
         } else if let Some(active) = self.active_sessions.get(self.selected_session_idx) {
-            match IpcClient::send_command(&active.socket_path, IpcRequest::Reload { files: vec![] }).await {
+            match IpcClient::send_command(&active.socket_path, IpcRequest::Reload { files: vec![] })
+                .await
+            {
                 Ok(resp) => self.status_message = Some(resp.message),
                 Err(e) => self.status_message = Some(format!("IPC reload error: {}", e)),
             }
@@ -542,25 +609,29 @@ impl TuiApp {
     pub fn nav_down(&mut self) {
         if self.mode == AppMode::Hub {
             match self.hub_focus {
-                HubFocus::Targets if !self.targets.is_empty() => {
-                    if self.selected_target_idx + 1 < self.targets.len() {
-                        self.selected_target_idx += 1;
-                    }
+                HubFocus::Targets
+                    if !self.targets.is_empty()
+                        && self.selected_target_idx + 1 < self.targets.len() =>
+                {
+                    self.selected_target_idx += 1;
                 }
-                HubFocus::Sessions if !self.active_sessions.is_empty() => {
-                    if self.selected_session_idx + 1 < self.active_sessions.len() {
-                        self.selected_session_idx += 1;
-                    }
+                HubFocus::Sessions
+                    if !self.active_sessions.is_empty()
+                        && self.selected_session_idx + 1 < self.active_sessions.len() =>
+                {
+                    self.selected_session_idx += 1;
                 }
-                HubFocus::Projects if !self.known_projects.is_empty() => {
-                    if self.selected_project_idx + 1 < self.known_projects.len() {
-                        self.selected_project_idx += 1;
-                    }
+                HubFocus::Projects
+                    if !self.known_projects.is_empty()
+                        && self.selected_project_idx + 1 < self.known_projects.len() =>
+                {
+                    self.selected_project_idx += 1;
                 }
-                HubFocus::Devices if !self.devices.is_empty() => {
-                    if self.selected_device_idx + 1 < self.devices.len() {
-                        self.selected_device_idx += 1;
-                    }
+                HubFocus::Devices
+                    if !self.devices.is_empty()
+                        && self.selected_device_idx + 1 < self.devices.len() =>
+                {
+                    self.selected_device_idx += 1;
                 }
                 _ => {}
             }

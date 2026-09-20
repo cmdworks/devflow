@@ -37,7 +37,8 @@ impl IpcResponse {
     }
 }
 
-pub type IpcCommandHandler = Arc<dyn Fn(IpcRequest) -> tokio::sync::oneshot::Receiver<IpcResponse> + Send + Sync>;
+pub type IpcCommandHandler =
+    Arc<dyn Fn(IpcRequest) -> tokio::sync::oneshot::Receiver<IpcResponse> + Send + Sync>;
 
 pub struct IpcServer {
     pub socket_path: PathBuf,
@@ -59,8 +60,13 @@ impl IpcServer {
             let _ = std::fs::remove_file(&self.socket_path);
         }
 
-        let listener = UnixListener::bind(&self.socket_path)
-            .map_err(|e| DevflowError::Ipc(format!("Failed to bind IPC socket {}: {}", self.socket_path.display(), e)))?;
+        let listener = UnixListener::bind(&self.socket_path).map_err(|e| {
+            DevflowError::Ipc(format!(
+                "Failed to bind IPC socket {}: {}",
+                self.socket_path.display(),
+                e
+            ))
+        })?;
 
         let socket_path_clone = self.socket_path.clone();
         let handler_arc = Arc::new(handler);
@@ -116,10 +122,16 @@ impl IpcServer {
 pub struct IpcClient;
 
 impl IpcClient {
-    pub async fn send_command(socket_path: impl AsRef<Path>, req: IpcRequest) -> Result<IpcResponse> {
+    pub async fn send_command(
+        socket_path: impl AsRef<Path>,
+        req: IpcRequest,
+    ) -> Result<IpcResponse> {
         let path = socket_path.as_ref();
         if !path.exists() {
-            return Err(DevflowError::Ipc(format!("IPC socket not found at {}", path.display())));
+            return Err(DevflowError::Ipc(format!(
+                "IPC socket not found at {}",
+                path.display()
+            )));
         }
 
         let mut stream = UnixStream::connect(path)
@@ -127,10 +139,14 @@ impl IpcClient {
             .map_err(|e| DevflowError::Ipc(format!("Failed to connect to IPC socket: {}", e)))?;
 
         let (reader, mut writer) = stream.split();
-        let mut msg = serde_json::to_string(&req).map_err(|e| DevflowError::Serialization(e.to_string()))?;
+        let mut msg =
+            serde_json::to_string(&req).map_err(|e| DevflowError::Serialization(e.to_string()))?;
         msg.push('\n');
 
-        writer.write_all(msg.as_bytes()).await.map_err(DevflowError::Io)?;
+        writer
+            .write_all(msg.as_bytes())
+            .await
+            .map_err(DevflowError::Io)?;
         writer.flush().await.map_err(DevflowError::Io)?;
 
         let mut lines = BufReader::new(reader).lines();
@@ -153,20 +169,22 @@ mod tests {
 
     #[tokio::test]
     async fn test_ipc_roundtrip() {
-        let sock_path = std::env::temp_dir().join(format!("test_devflow_{}.sock", std::process::id()));
+        let sock_path =
+            std::env::temp_dir().join(format!("test_devflow_{}.sock", std::process::id()));
         let _ = std::fs::remove_file(&sock_path);
 
         let server = IpcServer::new(&sock_path);
-        let _server = server.start(|req| async move {
-            match req {
-                IpcRequest::Reload { .. } => IpcResponse::ok("Reload dispatched successfully"),
-                IpcRequest::Restart => IpcResponse::ok("Restart dispatched successfully"),
-                IpcRequest::Status => IpcResponse::ok("Running"),
-                _ => IpcResponse::err("Unknown command"),
-            }
-        })
-        .await
-        .unwrap();
+        let _server = server
+            .start(|req| async move {
+                match req {
+                    IpcRequest::Reload { .. } => IpcResponse::ok("Reload dispatched successfully"),
+                    IpcRequest::Restart => IpcResponse::ok("Restart dispatched successfully"),
+                    IpcRequest::Status => IpcResponse::ok("Running"),
+                    _ => IpcResponse::err("Unknown command"),
+                }
+            })
+            .await
+            .unwrap();
 
         // Give server a few ms to bind
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# DevFlow CLI — production build wrapper
+# Runs the release binary; falls back to debug if release not built yet.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+RELEASE_BIN="$DEVFLOW_WORKSPACE_ROOT/target/release/devflow"
+DEBUG_BIN="$DEVFLOW_WORKSPACE_ROOT/target/debug/devflow"
+
+if [ -x "$RELEASE_BIN" ]; then
+    exec "$RELEASE_BIN" "$@"
+elif [ -x "$DEBUG_BIN" ]; then
+    >&2 echo "⚠  Release binary not found; running debug build. Run 'cargo build --release' for production."
+    exec "$DEBUG_BIN" "$@"
+else
+    >&2 echo "⚡ No binary found. Building release CLI..."
+    cargo build --release --manifest-path "$REPO_ROOT/Cargo.toml" -p devflow_cli >&2
+    exec "$RELEASE_BIN" "$@"
+fi

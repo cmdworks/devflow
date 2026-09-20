@@ -74,7 +74,11 @@ pub fn install_cli_symlink(custom_target_dir: Option<PathBuf>) -> Result<String>
     } else {
         anyhow::bail!(
             "Failed to install 'devflow' symlink into system PATH. (Tried: {}). Error: {:?}",
-            candidate_dirs.iter().map(|d| d.display().to_string()).collect::<Vec<_>>().join(", "),
+            candidate_dirs
+                .iter()
+                .map(|d| d.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", "),
             last_error
         );
     }
@@ -92,17 +96,20 @@ pub fn uninstall_cli_symlink() -> Result<String> {
     let mut removed = Vec::new();
     for dir in candidate_dirs {
         let link_path = dir.join("devflow");
-        if link_path.exists() || link_path.is_symlink() {
-            if std::fs::remove_file(&link_path).is_ok() {
-                removed.push(link_path.display().to_string());
-            }
+        if (link_path.exists() || link_path.is_symlink())
+            && std::fs::remove_file(&link_path).is_ok()
+        {
+            removed.push(link_path.display().to_string());
         }
     }
 
     if removed.is_empty() {
         Ok("No existing 'devflow' symlink found in candidate PATH directories.".to_string())
     } else {
-        Ok(format!("Removed 'devflow' symlink from: {}", removed.join(", ")))
+        Ok(format!(
+            "Removed 'devflow' symlink from: {}",
+            removed.join(", ")
+        ))
     }
 }
 
@@ -166,7 +173,10 @@ pub fn generate_completions<C: CommandFactory>(shell_name: &str) -> Result<Strin
         "fish" => Shell::Fish,
         "powershell" | "pwsh" => Shell::PowerShell,
         "elvish" => Shell::Elvish,
-        _ => anyhow::bail!("Unsupported shell '{}'. Supported: bash, zsh, fish, powershell, elvish", shell_name),
+        _ => anyhow::bail!(
+            "Unsupported shell '{}'. Supported: bash, zsh, fish, powershell, elvish",
+            shell_name
+        ),
     };
 
     let mut cmd = C::command();

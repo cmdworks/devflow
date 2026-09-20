@@ -51,7 +51,12 @@ impl DoctorEngine {
             match Command::new("swift").arg("--version").output() {
                 Ok(output) if output.status.success() => {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    let ver = stdout.lines().next().unwrap_or("Swift installed").trim().to_string();
+                    let ver = stdout
+                        .lines()
+                        .next()
+                        .unwrap_or("Swift installed")
+                        .trim()
+                        .to_string();
                     checks.push(DoctorCheck::pass_with_category(
                         "Swift Compiler & Toolchain",
                         ver.clone(),
@@ -70,7 +75,10 @@ impl DoctorEngine {
             }
 
             // 1.3 macOS SDK Path
-            match Command::new("xcrun").args(&["--show-sdk-path", "--sdk", "macosx"]).output() {
+            match Command::new("xcrun")
+                .args(["--show-sdk-path", "--sdk", "macosx"])
+                .output()
+            {
                 Ok(output) if output.status.success() => {
                     let sdk_path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     checks.push(DoctorCheck::pass_with_category(
@@ -93,9 +101,17 @@ impl DoctorEngine {
             // 1.4 Xcode License Acceptance & Version
             let xcode_app = Path::new("/Applications/Xcode.app");
             if xcode_app.exists() {
-                match Command::new("xcrun").args(&["xcodebuild", "-version"]).output() {
+                match Command::new("xcrun")
+                    .args(["xcodebuild", "-version"])
+                    .output()
+                {
                     Ok(output) if output.status.success() => {
-                        let ver = String::from_utf8_lossy(&output.stdout).lines().next().unwrap_or("Xcode installed").trim().to_string();
+                        let ver = String::from_utf8_lossy(&output.stdout)
+                            .lines()
+                            .next()
+                            .unwrap_or("Xcode installed")
+                            .trim()
+                            .to_string();
                         checks.push(DoctorCheck::pass_with_category(
                             "Xcode.app & License",
                             format!("Installed ({})", ver),
@@ -126,7 +142,10 @@ impl DoctorEngine {
                             "Xcode.app",
                             "Xcode.app found in /Applications but xcodebuild failed to run.",
                             apple_category,
-                            Some("sudo xcode-select -s /Applications/Xcode.app/Contents/Developer".to_string()),
+                            Some(
+                                "sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+                                    .to_string(),
+                            ),
                         ));
                     }
                 }
@@ -140,10 +159,16 @@ impl DoctorEngine {
             }
 
             // 1.5 Apple Simulator Control (simctl)
-            match Command::new("xcrun").args(&["simctl", "list", "devices", "available"]).output() {
+            match Command::new("xcrun")
+                .args(["simctl", "list", "devices", "available"])
+                .output()
+            {
                 Ok(output) if output.status.success() => {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    let count = stdout.lines().filter(|l| l.contains("Booted") || l.contains("Shutdown")).count();
+                    let count = stdout
+                        .lines()
+                        .filter(|l| l.contains("Booted") || l.contains("Shutdown"))
+                        .count();
                     checks.push(DoctorCheck::pass_with_category(
                         "Apple Simulator Control (simctl)",
                         format!("Available ({} simulator devices discovered)", count),
@@ -156,7 +181,10 @@ impl DoctorEngine {
                         "Apple Simulator Control (simctl)",
                         "simctl not operational. Xcode.app is required for simulator control.",
                         apple_category,
-                        Some("sudo xcode-select -s /Applications/Xcode.app/Contents/Developer".to_string()),
+                        Some(
+                            "sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+                                .to_string(),
+                        ),
                     ));
                 }
             }
@@ -182,8 +210,17 @@ impl DoctorEngine {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                let ver_str = if !stdout.trim().is_empty() { stdout } else { stderr };
-                let ver = ver_str.lines().next().unwrap_or("javac installed").trim().to_string();
+                let ver_str = if !stdout.trim().is_empty() {
+                    stdout
+                } else {
+                    stderr
+                };
+                let ver = ver_str
+                    .lines()
+                    .next()
+                    .unwrap_or("javac installed")
+                    .trim()
+                    .to_string();
                 let extra = if let Some(ref jh) = java_home_env {
                     format!(" ({}, JAVA_HOME={})", ver, jh)
                 } else {
@@ -200,7 +237,10 @@ impl DoctorEngine {
                 if let Some(ref jh) = java_home_env {
                     checks.push(DoctorCheck::warn_with_category(
                         "Java Development Kit (JDK)",
-                        format!("JAVA_HOME is set ({}) but javac is not accessible in PATH.", jh),
+                        format!(
+                            "JAVA_HOME is set ({}) but javac is not accessible in PATH.",
+                            jh
+                        ),
                         android_category,
                         Some("export PATH=$JAVA_HOME/bin:$PATH".to_string()),
                     ));
@@ -216,7 +256,10 @@ impl DoctorEngine {
         }
 
         // 2.2 Android SDK & ANDROID_HOME
-        let home_dir = std::env::var("HOME").or_else(|_| std::env::var("USERPROFILE")).ok().map(PathBuf::from);
+        let home_dir = std::env::var("HOME")
+            .or_else(|_| std::env::var("USERPROFILE"))
+            .ok()
+            .map(PathBuf::from);
         let android_sdk_paths = [
             std::env::var("ANDROID_HOME").ok().map(PathBuf::from),
             std::env::var("ANDROID_SDK_ROOT").ok().map(PathBuf::from),
@@ -252,7 +295,12 @@ impl DoctorEngine {
         match Command::new("adb").arg("version").output() {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let ver = stdout.lines().next().unwrap_or("adb operational").trim().to_string();
+                let ver = stdout
+                    .lines()
+                    .next()
+                    .unwrap_or("adb operational")
+                    .trim()
+                    .to_string();
                 checks.push(DoctorCheck::pass_with_category(
                     "Android Debug Bridge (adb)",
                     ver.clone(),
@@ -274,7 +322,12 @@ impl DoctorEngine {
         match Command::new("gradle").arg("--version").output() {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let ver = stdout.lines().find(|l| l.starts_with("Gradle ")).unwrap_or("Gradle installed").trim().to_string();
+                let ver = stdout
+                    .lines()
+                    .find(|l| l.starts_with("Gradle "))
+                    .unwrap_or("Gradle installed")
+                    .trim()
+                    .to_string();
                 checks.push(DoctorCheck::pass_with_category(
                     "Gradle (System)",
                     ver.clone(),
@@ -314,7 +367,10 @@ impl DoctorEngine {
                     "Cargo (Rust Toolchain)",
                     "Cargo / rustc not found in PATH.",
                     rust_category,
-                    Some("curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh".to_string()),
+                    Some(
+                        "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"
+                            .to_string(),
+                    ),
                 ));
             }
         }
@@ -323,7 +379,12 @@ impl DoctorEngine {
         match Command::new("cc").arg("--version").output() {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let ver = stdout.lines().next().unwrap_or("C Linker installed").trim().to_string();
+                let ver = stdout
+                    .lines()
+                    .next()
+                    .unwrap_or("C Linker installed")
+                    .trim()
+                    .to_string();
                 checks.push(DoctorCheck::pass_with_category(
                     "C/C++ Compiler & Linker (cc)",
                     ver.clone(),
@@ -363,7 +424,7 @@ impl DoctorEngine {
         }
 
         // 3.4 Tauri CLI
-        match Command::new("cargo").args(&["tauri", "--version"]).output() {
+        match Command::new("cargo").args(["tauri", "--version"]).output() {
             Ok(output) if output.status.success() => {
                 let ver = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 checks.push(DoctorCheck::pass_with_category(
@@ -389,13 +450,31 @@ impl DoctorEngine {
         let web_category = "Core Web & Scripting Runtimes";
 
         // 4.1 Node.js
-        checks.push(Self::check_tool_with_category("node", &["--version"], "Node.js Runtime", web_category, false));
+        checks.push(Self::check_tool_with_category(
+            "node",
+            &["--version"],
+            "Node.js Runtime",
+            web_category,
+            false,
+        ));
 
         // 4.2 Bun
-        checks.push(Self::check_tool_with_category("bun", &["--version"], "Bun Runtime", web_category, false));
+        checks.push(Self::check_tool_with_category(
+            "bun",
+            &["--version"],
+            "Bun Runtime",
+            web_category,
+            false,
+        ));
 
         // 4.3 Flutter
-        checks.push(Self::check_tool_with_category("flutter", &["--version"], "Flutter SDK", web_category, false));
+        checks.push(Self::check_tool_with_category(
+            "flutter",
+            &["--version"],
+            "Flutter SDK",
+            web_category,
+            false,
+        ));
 
         // ═══════════════════════════════════════════════════════════════════
         // 5. Workspace & Project Diagnostics
@@ -408,7 +487,10 @@ impl DoctorEngine {
                 Ok(cfg) => {
                     checks.push(DoctorCheck::pass_with_category(
                         "devflow.toml Configuration",
-                        format!("Valid configuration (platform: {}, framework: {})", cfg.project.platform, cfg.project.framework),
+                        format!(
+                            "Valid configuration (platform: {}, framework: {})",
+                            cfg.project.platform, cfg.project.framework
+                        ),
                         ws_category,
                         None,
                     ));
@@ -432,10 +514,7 @@ impl DoctorEngine {
         }
 
         // 5.2 gradlew wrapper executable check
-        let gradlew_candidates = [
-            path.join("gradlew"),
-            path.join("android/gradlew"),
-        ];
+        let gradlew_candidates = [path.join("gradlew"), path.join("android/gradlew")];
         for gw in &gradlew_candidates {
             if gw.exists() {
                 #[cfg(unix)]
@@ -446,7 +525,10 @@ impl DoctorEngine {
                         if is_executable {
                             checks.push(DoctorCheck::pass_with_category(
                                 "Gradle Wrapper Permissions",
-                                format!("Executable permissions verified for {}", gw.file_name().unwrap_or_default().to_string_lossy()),
+                                format!(
+                                    "Executable permissions verified for {}",
+                                    gw.file_name().unwrap_or_default().to_string_lossy()
+                                ),
                                 ws_category,
                                 None,
                             ));
@@ -478,12 +560,28 @@ impl DoctorEngine {
         DoctorReport::new(path.to_string_lossy().to_string(), checks)
     }
 
-    fn check_tool_with_category(bin: &str, args: &[&str], display_name: &str, category: &str, required: bool) -> DoctorCheck {
+    fn check_tool_with_category(
+        bin: &str,
+        args: &[&str],
+        display_name: &str,
+        category: &str,
+        required: bool,
+    ) -> DoctorCheck {
         match Command::new(bin).args(args).output() {
             Ok(output) if output.status.success() => {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                let first_line = stdout.lines().next().unwrap_or("Installed").trim().to_string();
-                DoctorCheck::pass_with_category(display_name, first_line.clone(), category, Some(first_line))
+                let first_line = stdout
+                    .lines()
+                    .next()
+                    .unwrap_or("Installed")
+                    .trim()
+                    .to_string();
+                DoctorCheck::pass_with_category(
+                    display_name,
+                    first_line.clone(),
+                    category,
+                    Some(first_line),
+                )
             }
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -492,14 +590,20 @@ impl DoctorEngine {
                         display_name,
                         format!("Tool '{}' failed: {}", bin, stderr.trim()),
                         category,
-                        Some(format!("Ensure '{}' is properly installed and accessible in PATH.", bin)),
+                        Some(format!(
+                            "Ensure '{}' is properly installed and accessible in PATH.",
+                            bin
+                        )),
                     )
                 } else {
                     DoctorCheck::warn_with_category(
                         display_name,
                         format!("Tool '{}' returned non-zero exit code.", bin),
                         category,
-                        Some(format!("Optional for generic projects, required for native {} builds.", bin)),
+                        Some(format!(
+                            "Optional for generic projects, required for native {} builds.",
+                            bin
+                        )),
                     )
                 }
             }
@@ -509,7 +613,10 @@ impl DoctorEngine {
                         display_name,
                         format!("'{}' not found in PATH", bin),
                         category,
-                        Some(format!("Please install '{}' and add it to your system PATH.", bin)),
+                        Some(format!(
+                            "Please install '{}' and add it to your system PATH.",
+                            bin
+                        )),
                     )
                 } else {
                     DoctorCheck::warn_with_category(
@@ -523,4 +630,3 @@ impl DoctorEngine {
         }
     }
 }
-

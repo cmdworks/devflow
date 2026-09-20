@@ -5,6 +5,7 @@ import {
   Terminal,
   Server,
   Check,
+  Bot,
 } from "lucide-react";
 
 interface SettingsModalProps {
@@ -12,6 +13,7 @@ interface SettingsModalProps {
   onClose: () => void;
   onInstallCli: () => Promise<void>;
   onUninstallCli: () => Promise<void>;
+  onOpenMcp?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -19,6 +21,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onInstallCli,
   onUninstallCli,
+  onOpenMcp,
 }) => {
   const [cliStatusMsg, setCliStatusMsg] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -100,6 +103,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>Uninstall CLI Link</span>
               </button>
             </div>
+          </div>
+
+          {/* Model Context Protocol (MCP) Section */}
+          <div className="settings-section">
+            <div className="settings-section-title">
+              <Bot size={14} color="#c084fc" />
+              <span>Model Context Protocol (MCP) Hub</span>
+            </div>
+            <p className="settings-desc">
+              Expose DevFlow targets, device matrix, run lifecycle, and logs directly to AI coding agents (Claude Desktop, Cursor, Antigravity, VS Code).
+            </p>
+            {onOpenMcp && (
+              <div style={{ marginTop: "10px" }}>
+                <button
+                  className="btn-primary-action"
+                  style={{
+                    background: "rgba(168, 85, 247, 0.15)",
+                    borderColor: "rgba(168, 85, 247, 0.4)",
+                    color: "#c084fc",
+                  }}
+                  onClick={() => {
+                    onClose();
+                    onOpenMcp();
+                  }}
+                >
+                  <Bot size={12} />
+                  <span>Configure MCP Server & Tools</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Engine & Runtime Section */}

@@ -63,7 +63,12 @@ pub struct Device {
 }
 
 impl Device {
-    pub fn new(id: impl Into<String>, name: impl Into<String>, platform: Platform, state: DeviceState) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        name: impl Into<String>,
+        platform: Platform,
+        state: DeviceState,
+    ) -> Self {
         Self {
             id: id.into(),
             name: name.into(),

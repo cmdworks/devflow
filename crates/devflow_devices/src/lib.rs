@@ -6,8 +6,8 @@ pub mod emulator;
 pub use adb::AdbDiscoverer;
 pub use apple::AppleDiscoverer;
 pub use desktop::DesktopDiscoverer;
-pub use emulator::EmulatorManager;
 use devflow_protocol::{Device, Platform};
+pub use emulator::EmulatorManager;
 
 pub struct DeviceManager;
 
@@ -25,7 +25,10 @@ impl DeviceManager {
         // 3. Android Virtual Devices (AVDs available to boot)
         let avds = EmulatorManager::discover_avd_devices().await;
         for avd in avds {
-            if !all_devices.iter().any(|d| d.id == avd.id || d.name == avd.name) {
+            if !all_devices
+                .iter()
+                .any(|d| d.id == avd.id || d.name == avd.name)
+            {
                 all_devices.push(avd);
             }
         }
@@ -36,11 +39,17 @@ impl DeviceManager {
         all_devices
     }
 
-    pub async fn find_best_match(preferred_platform: Option<Platform>, target_id: Option<&str>) -> Option<Device> {
+    pub async fn find_best_match(
+        preferred_platform: Option<Platform>,
+        target_id: Option<&str>,
+    ) -> Option<Device> {
         let devices = Self::discover_all().await;
 
         if let Some(id) = target_id {
-            if let Some(d) = devices.iter().find(|d| d.id == id || d.name.eq_ignore_ascii_case(id)) {
+            if let Some(d) = devices
+                .iter()
+                .find(|d| d.id == id || d.name.eq_ignore_ascii_case(id))
+            {
                 return Some(d.clone());
             }
         }
@@ -49,19 +58,24 @@ impl DeviceManager {
             // First look for connected/booted device matching platform
             if let Some(d) = devices.iter().find(|d| {
                 (d.platform == pref || (pref == Platform::Ios && d.platform == Platform::Apple))
-                    && (d.state == devflow_protocol::DeviceState::Connected || d.state == devflow_protocol::DeviceState::Booted)
+                    && (d.state == devflow_protocol::DeviceState::Connected
+                        || d.state == devflow_protocol::DeviceState::Booted)
             }) {
                 return Some(d.clone());
             }
 
             // Then any device matching platform
-            if let Some(d) = devices.iter().find(|d| d.platform == pref || (pref == Platform::Ios && d.platform == Platform::Apple)) {
+            if let Some(d) = devices.iter().find(|d| {
+                d.platform == pref || (pref == Platform::Ios && d.platform == Platform::Apple)
+            }) {
                 return Some(d.clone());
             }
         }
 
         // Fallback to desktop host
-        devices.into_iter().find(|d| d.platform == Platform::Desktop)
+        devices
+            .into_iter()
+            .find(|d| d.platform == Platform::Desktop)
     }
 
     pub async fn boot_device(target_id: &str) -> Result<String, String> {

@@ -53,7 +53,10 @@ pub fn init_environment() {
                     let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     if !path_str.is_empty() && Path::new(&path_str).exists() {
                         std::env::set_var("JAVA_HOME", &path_str);
-                        debug!("Auto-configured JAVA_HOME via /usr/libexec/java_home={}", path_str);
+                        debug!(
+                            "Auto-configured JAVA_HOME via /usr/libexec/java_home={}",
+                            path_str
+                        );
                     }
                 }
             }

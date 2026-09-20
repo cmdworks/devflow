@@ -1,7 +1,8 @@
 use crate::handler::McpHandler;
 use devflow_protocol::{JsonRpcRequest, JsonRpcResponse};
-use std::io::{self, BufRead, Write};
+use std::io::{self, IsTerminal};
 use std::sync::Arc;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tracing::{debug, error};
 
 pub struct StdioServer {
@@ -14,40 +15,62 @@ impl StdioServer {
     }
 
     pub async fn run(&self) -> io::Result<()> {
-        let stdin = io::stdin();
-        let mut stdout = io::stdout();
+        if std::io::stdin().is_terminal() {
+            eprintln!("⚡ DevFlow Model Context Protocol (MCP) Stdio Server");
+            eprintln!("   Status: Listening for JSON-RPC messages on stdin/stdout...");
+            eprintln!(
+                "   Host Integration: Ready for Claude Desktop, Cursor, Antigravity, or VS Code."
+            );
+            eprintln!("   (Type JSON-RPC 2.0 requests or press Ctrl+C to exit)\n");
+        }
 
-        for line in stdin.lock().lines() {
-            let line = match line {
-                Ok(l) => l,
+        let stdin = tokio::io::stdin();
+        let mut stdout = tokio::io::stdout();
+        let mut reader = BufReader::new(stdin);
+        let mut line = String::new();
+
+        loop {
+            line.clear();
+            match reader.read_line(&mut line).await {
+                Ok(0) => break, // EOF reached
+                Ok(_) => {
+                    let trimmed = line.trim();
+                    if trimmed.is_empty() {
+                        continue;
+                    }
+
+                    debug!("Received MCP stdio line: {}", trimmed);
+
+                    let req: JsonRpcRequest = match serde_json::from_str(trimmed) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            let err_resp = JsonRpcResponse::error(
+                                None,
+                                -32700,
+                                format!("Parse error: {}", e),
+                                None,
+                            );
+                            if let Ok(out) = serde_json::to_string(&err_resp) {
+                                let _ = stdout.write_all(out.as_bytes()).await;
+                                let _ = stdout.write_all(b"\n").await;
+                                let _ = stdout.flush().await;
+                            }
+                            continue;
+                        }
+                    };
+
+                    let response = self.handler.handle_request(req).await;
+                    if let Ok(out) = serde_json::to_string(&response) {
+                        let _ = stdout.write_all(out.as_bytes()).await;
+                        let _ = stdout.write_all(b"\n").await;
+                        let _ = stdout.flush().await;
+                    }
+                }
                 Err(e) => {
                     error!("Error reading line from stdin: {}", e);
                     break;
                 }
-            };
-
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
             }
-
-            debug!("Received MCP stdio line: {}", trimmed);
-
-            let req: JsonRpcRequest = match serde_json::from_str(trimmed) {
-                Ok(r) => r,
-                Err(e) => {
-                    let err_resp = JsonRpcResponse::error(None, -32700, format!("Parse error: {}", e), None);
-                    let out = serde_json::to_string(&err_resp).unwrap();
-                    writeln!(stdout, "{}", out)?;
-                    stdout.flush()?;
-                    continue;
-                }
-            };
-
-            let response = self.handler.handle_request(req).await;
-            let out = serde_json::to_string(&response).unwrap();
-            writeln!(stdout, "{}", out)?;
-            stdout.flush()?;
         }
 
         Ok(())

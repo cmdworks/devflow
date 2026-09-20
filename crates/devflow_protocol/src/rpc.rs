@@ -38,7 +38,12 @@ impl JsonRpcResponse {
         }
     }
 
-    pub fn error(id: Option<Value>, code: i64, message: impl Into<String>, data: Option<Value>) -> Self {
+    pub fn error(
+        id: Option<Value>,
+        code: i64,
+        message: impl Into<String>,
+        data: Option<Value>,
+    ) -> Self {
         Self {
             jsonrpc: "2.0".to_string(),
             id,
@@ -93,4 +98,3 @@ pub enum DevflowStreamEvent {
         duration_ms: Option<u64>,
     },
 }
-

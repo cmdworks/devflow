@@ -75,7 +75,11 @@ impl XcodeAdapter {
         Vec::new()
     }
 
-    pub async fn get_build_settings(dir: &Path, scheme: Option<&str>, destination: Option<&str>) -> Option<Value> {
+    pub async fn get_build_settings(
+        dir: &Path,
+        scheme: Option<&str>,
+        destination: Option<&str>,
+    ) -> Option<Value> {
         let mut cmd = Command::new("xcodebuild");
         cmd.args(["-showBuildSettings", "-json"]).current_dir(dir);
 
@@ -132,16 +136,22 @@ impl FrameworkAdapter for XcodeAdapter {
     async fn build(&self, ctx: &BuildContext) -> Result<BuildResult> {
         let start = Instant::now();
         let (container_path, is_workspace) = Self::find_xcode_container(&ctx.project_dir)
-            .ok_or_else(|| DevflowError::Build("No .xcodeproj or .xcworkspace found".to_string()))?;
+            .ok_or_else(|| {
+                DevflowError::Build("No .xcodeproj or .xcworkspace found".to_string())
+            })?;
 
         let schemes = Self::list_schemes(&ctx.project_dir).await;
-        let scheme = schemes.first().cloned().unwrap_or_else(|| ctx.config.project.name.clone());
+        let scheme = schemes
+            .first()
+            .cloned()
+            .unwrap_or_else(|| ctx.config.project.name.clone());
 
         let mut cmd = Command::new("xcodebuild");
         cmd.current_dir(&ctx.project_dir);
 
         if is_workspace {
-            cmd.arg("-workspace").arg(container_path.file_name().unwrap());
+            cmd.arg("-workspace")
+                .arg(container_path.file_name().unwrap());
         } else {
             cmd.arg("-project").arg(container_path.file_name().unwrap());
         }
@@ -151,11 +161,7 @@ impl FrameworkAdapter for XcodeAdapter {
         // Configure destination
         let dest_str = if let Some(ref dev) = ctx.target_device {
             if dev.platform == Platform::Ios || dev.platform == Platform::Apple {
-                if dev.is_emulator {
-                    format!("id={}", dev.id)
-                } else {
-                    format!("id={}", dev.id)
-                }
+                format!("id={}", dev.id)
             } else {
                 "generic/platform=macOS".to_string()
             }
@@ -171,9 +177,16 @@ impl FrameworkAdapter for XcodeAdapter {
             cmd.args(["-configuration", "Debug"]);
         }
 
-        info!("Running 'xcodebuild -scheme {} -destination {}' in {}", scheme, dest_str, ctx.project_dir.display());
+        info!(
+            "Running 'xcodebuild -scheme {} -destination {}' in {}",
+            scheme,
+            dest_str,
+            ctx.project_dir.display()
+        );
 
-        let output = cmd.output().await
+        let output = cmd
+            .output()
+            .await
             .map_err(|e| DevflowError::Build(format!("Failed to run xcodebuild: {}", e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -184,7 +197,9 @@ impl FrameworkAdapter for XcodeAdapter {
             // Find build product path
             let mut app_path = None;
             for line in stdout.lines().rev() {
-                if line.contains(".app") && line.contains("BUILD SUCCESSFUL") || line.contains("Signing") {
+                if line.contains(".app") && line.contains("BUILD SUCCESSFUL")
+                    || line.contains("Signing")
+                {
                     if let Some(pos) = line.find('/') {
                         let path_candidate = &line[pos..];
                         if let Some(end) = path_candidate.find(".app") {
@@ -211,20 +226,30 @@ impl FrameworkAdapter for XcodeAdapter {
 
     async fn install(&self, ctx: &DeviceContext) -> Result<()> {
         let app_path = ctx.artifact_path.as_deref();
-        self.apple_runner.install(&ctx.project_dir, &ctx.device, app_path).await
+        self.apple_runner
+            .install(&ctx.project_dir, &ctx.device, app_path)
+            .await
     }
 
     async fn launch(&self, ctx: &DeviceContext) -> Result<()> {
-        let bundle_id = ctx.config.project.package_id.clone().or_else(|| {
-            if let Some(ref path) = ctx.artifact_path {
-                Self::extract_bundle_id(Path::new(path))
-            } else {
-                None
-            }
-        }).unwrap_or_else(|| format!("com.example.{}", ctx.config.project.name));
+        let bundle_id = ctx
+            .config
+            .project
+            .package_id
+            .clone()
+            .or_else(|| {
+                if let Some(ref path) = ctx.artifact_path {
+                    Self::extract_bundle_id(Path::new(path))
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_else(|| format!("com.example.{}", ctx.config.project.name));
 
         info!("Launching Xcode app bundle: {}", bundle_id);
-        self.apple_runner.launch(&ctx.project_dir, &ctx.device, Some(&bundle_id)).await
+        self.apple_runner
+            .launch(&ctx.project_dir, &ctx.device, Some(&bundle_id))
+            .await
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
@@ -243,11 +268,19 @@ impl FrameworkAdapter for XcodeAdapter {
     }
 
     async fn restart(&self, ctx: &DeviceContext) -> Result<()> {
-        self.apple_runner.stop(&ctx.project_dir, &ctx.device).await?;
+        self.apple_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await?;
         self.launch(ctx).await
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
-        self.apple_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        self.apple_runner
+            .stream_logs(&ctx.project_dir, &ctx.device, tx)
+            .await
     }
 }

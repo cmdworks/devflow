@@ -1,11 +1,63 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import type { WorkspaceResponse, Device, DoctorReport } from "../types";
 
+export interface FetchMcpLogsParams {
+  limit?: number;
+  offset?: number;
+  session_id?: string;
+  client?: string;
+  tool_name?: string;
+  status?: string;
+  search?: string;
+}
+
 export function getApiBase(): string {
-  if (typeof window !== "undefined" && (window.location.protocol === "http:" || window.location.protocol === "https:")) {
-    return window.location.origin;
+  if (typeof window !== "undefined") {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const queryPort = params.get("port");
+      if (queryPort) {
+        return `http://localhost:${queryPort}`;
+      }
+    } catch (_) {}
+
+    if (
+      (window.location.protocol === "http:" || window.location.protocol === "https:") &&
+      window.location.port
+    ) {
+      return window.location.origin;
+    }
   }
   return "http://localhost:9292";
+}
+
+async function parseJsonResponse<T>(res: Response): Promise<T> {
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const data = await res.json();
+      if (data?.error) detail = `: ${data.error}`;
+      else if (data?.message) detail = `: ${data.message}`;
+    } catch (_) {
+      try {
+        const text = await res.text();
+        if (text && text.length < 80) detail = `: ${text.trim()}`;
+      } catch (_) {}
+    }
+    throw new Error(`HTTP error ${res.status}${detail}`);
+  }
+
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await res.text();
+    throw new Error(
+      `Invalid server response format (${contentType || "non-JSON"}). ${
+        text.startsWith("<!") ? "Received HTML instead of JSON API response." : ""
+      }`
+    );
+  }
+
+  return await res.json();
 }
 
 export function useDevFlowApi() {
@@ -17,16 +69,14 @@ export function useDevFlowApi() {
         ? `${apiBase}/api/workspace?dir=${encodeURIComponent(dirPath)}`
         : `${apiBase}/api/workspace`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-      return await res.json();
+      return parseJsonResponse<WorkspaceResponse>(res);
     },
     [apiBase]
   );
 
   const fetchDevices = useCallback(async (): Promise<Device[]> => {
     const res = await fetch(`${apiBase}/api/devices`);
-    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-    return await res.json();
+    return parseJsonResponse<Device[]>(res);
   }, [apiBase]);
 
   const bootEmulator = useCallback(
@@ -175,22 +225,126 @@ export function useDevFlowApi() {
     }
   }, [apiBase]);
 
-  return {
-    fetchWorkspace,
-    fetchWorkspaces,
-    addWorkspace,
-    removeWorkspace,
-    pickFolder,
-    fetchDevices,
-    bootEmulator,
-    startTarget,
-    stopTarget,
-    reloadTarget,
-    restartTarget,
-    reloadAll,
-    restartAll,
-    runDoctor,
-    installShellCli,
-    uninstallShellCli,
-  };
+  const fetchMcpStatus = useCallback(async (): Promise<import("../types").McpStatusResponse> => {
+    const res = await fetch(`${apiBase}/api/mcp/status`);
+    return parseJsonResponse<import("../types").McpStatusResponse>(res);
+  }, [apiBase]);
+
+  const toggleMcpServer = useCallback(
+    async (enabled: boolean): Promise<{ success: boolean; enabled: boolean }> => {
+      const res = await fetch(`${apiBase}/api/mcp/toggle`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled }),
+      });
+      return parseJsonResponse<{ success: boolean; enabled: boolean }>(res);
+    },
+    [apiBase]
+  );
+
+  const fetchMcpLogs = useCallback(
+    async (params?: FetchMcpLogsParams | number): Promise<import("../types").McpAccessLogEntry[]> => {
+      let query = "";
+      if (typeof params === "number") {
+        query = `?limit=${params}`;
+      } else if (params) {
+        const q = new URLSearchParams();
+        if (params.limit) q.set("limit", params.limit.toString());
+        if (params.offset) q.set("offset", params.offset.toString());
+        if (params.session_id) q.set("session_id", params.session_id);
+        if (params.client) q.set("client", params.client);
+        if (params.tool_name) q.set("tool_name", params.tool_name);
+        if (params.status) q.set("status", params.status);
+        if (params.search) q.set("search", params.search);
+        query = `?${q.toString()}`;
+      }
+      const res = await fetch(`${apiBase}/api/mcp/logs${query}`);
+      return parseJsonResponse<import("../types").McpAccessLogEntry[]>(res);
+    },
+    [apiBase]
+  );
+
+  const fetchMcpSessions = useCallback(async (): Promise<import("../types").McpSessionDescriptor[]> => {
+    const res = await fetch(`${apiBase}/api/mcp/sessions`);
+    return parseJsonResponse<import("../types").McpSessionDescriptor[]>(res);
+  }, [apiBase]);
+
+  const fetchMcpAgents = useCallback(async (): Promise<string[]> => {
+    const res = await fetch(`${apiBase}/api/mcp/agents`);
+    return parseJsonResponse<string[]>(res);
+  }, [apiBase]);
+
+  const deleteMcpLog = useCallback(
+    async (id: string): Promise<{ success: boolean }> => {
+      const res = await fetch(`${apiBase}/api/mcp/logs?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      return parseJsonResponse<{ success: boolean }>(res);
+    },
+    [apiBase]
+  );
+
+  const clearMcpLogs = useCallback(
+    async (sessionId?: string): Promise<{ success: boolean }> => {
+      const query = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+      const res = await fetch(`${apiBase}/api/mcp/logs${query}`, {
+        method: "DELETE",
+      });
+      return parseJsonResponse<{ success: boolean }>(res);
+    },
+    [apiBase]
+  );
+
+  return useMemo(
+    () => ({
+      fetchWorkspace,
+      fetchWorkspaces,
+      addWorkspace,
+      removeWorkspace,
+      pickFolder,
+      fetchDevices,
+      bootEmulator,
+      startTarget,
+      stopTarget,
+      reloadTarget,
+      restartTarget,
+      reloadAll,
+      restartAll,
+      runDoctor,
+      installShellCli,
+      uninstallShellCli,
+      fetchMcpStatus,
+      toggleMcpServer,
+      fetchMcpLogs,
+      fetchMcpSessions,
+      fetchMcpAgents,
+      deleteMcpLog,
+      clearMcpLogs,
+    }),
+    [
+      fetchWorkspace,
+      fetchWorkspaces,
+      addWorkspace,
+      removeWorkspace,
+      pickFolder,
+      fetchDevices,
+      bootEmulator,
+      startTarget,
+      stopTarget,
+      reloadTarget,
+      restartTarget,
+      reloadAll,
+      restartAll,
+      runDoctor,
+      installShellCli,
+      uninstallShellCli,
+      fetchMcpStatus,
+      toggleMcpServer,
+      fetchMcpLogs,
+      fetchMcpSessions,
+      fetchMcpAgents,
+      deleteMcpLog,
+      clearMcpLogs,
+    ]
+  );
 }

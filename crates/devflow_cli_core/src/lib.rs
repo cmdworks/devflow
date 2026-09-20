@@ -1,3 +1,4 @@
+pub mod mcp_connect;
 pub mod shell;
 
 use clap::{Parser, Subcommand};
@@ -243,6 +244,107 @@ pub enum McpCommands {
         /// Optional bearer authentication token for HTTP mode (or DEVFLOW_AUTH_TOKEN env var)
         #[arg(short, long, env = "DEVFLOW_AUTH_TOKEN")]
         token: Option<String>,
+
+        /// Explicitly specify calling AI agent client name (e.g. 'Claude Desktop', 'Cursor')
+        #[arg(long)]
+        agent: Option<String>,
+    },
+
+    /// Start MCP tools server (alias for 'serve')
+    Start {
+        /// Run HTTP server instead of stdio
+        #[arg(long)]
+        http: bool,
+
+        /// Port for HTTP server
+        #[arg(short, long, default_value = "9292")]
+        port: u16,
+
+        /// Optional bearer authentication token for HTTP mode (or DEVFLOW_AUTH_TOKEN env var)
+        #[arg(short, long, env = "DEVFLOW_AUTH_TOKEN")]
+        token: Option<String>,
+
+        /// Explicitly specify calling AI agent client name (e.g. 'Claude Desktop', 'Cursor')
+        #[arg(long)]
+        agent: Option<String>,
+    },
+
+    /// Auto-connect/install DevFlow MCP server into Claude Desktop, Cursor, Antigravity, or VS Code
+    Connect {
+        /// Target AI host: 'claude', 'cursor', 'antigravity', 'vscode', or 'all' (default: all)
+        #[arg(default_value = "all")]
+        agent: String,
+
+        /// Force overwrite of existing devflow entry
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Alias for 'connect'
+    Install {
+        /// Target AI host: 'claude', 'cursor', 'antigravity', 'vscode', or 'all' (default: all)
+        #[arg(default_value = "all")]
+        agent: String,
+
+        /// Force overwrite of existing devflow entry
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Check DevFlow MCP server status, health, and available tools
+    Status {
+        /// Output status as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all 11 MCP tools and parameter schemas
+    Tools {
+        /// Output tools catalog as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all 11 MCP tools (alias for 'tools')
+    List {
+        /// Output tools catalog as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// View or manage MCP tool execution & access logs
+    Logs {
+        /// Number of recent access log entries to show (default: 20)
+        #[arg(short, long, default_value = "20")]
+        limit: usize,
+
+        /// Filter logs by active session ID
+        #[arg(short, long)]
+        session: Option<String>,
+
+        /// Filter logs by calling AI agent (e.g. 'Cursor', 'Claude', 'Antigravity', 'vscode')
+        #[arg(short, long)]
+        agent: Option<String>,
+
+        /// Filter logs by tool name (e.g. devflow_doctor)
+        #[arg(short, long)]
+        tool: Option<String>,
+
+        /// Filter logs by status ('success' or 'error')
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Show full input arguments and output response payload JSON
+        #[arg(long)]
+        full: bool,
+
+        /// Clear logs (all logs, or session logs if --session is specified)
+        #[arg(long)]
+        clear: bool,
+
+        /// Delete a single log entry by its ID
+        #[arg(long)]
+        delete: Option<String>,
     },
 }
 
@@ -289,7 +391,10 @@ where
 
     if let Some(cmd) = cli.command {
         match cmd {
-            Commands::Init { platform, framework } => {
+            Commands::Init {
+                platform,
+                framework,
+            } => {
                 handle_init(platform, framework).await?;
                 Ok(CliAction::Executed)
             }
@@ -310,7 +415,11 @@ where
                 handle_dev(target, framework, no_tui, json).await?;
                 Ok(CliAction::Executed)
             }
-            Commands::Build { release, target, json } => {
+            Commands::Build {
+                release,
+                target,
+                json,
+            } => {
                 handle_build(release, target, json).await?;
                 Ok(CliAction::Executed)
             }
@@ -348,7 +457,10 @@ where
                 ShellCommands::Install { dest } => {
                     let msg = shell::install_cli_symlink(dest)?;
                     println!("{} {}", "✓".green().bold(), msg);
-                    println!("Tip: Add '{}' to your shell rc file for shortcuts & completions.", "eval \"$(devflow shell hook zsh)\"".cyan());
+                    println!(
+                        "Tip: Add '{}' to your shell rc file for shortcuts & completions.",
+                        "eval \"$(devflow shell hook zsh)\"".cyan()
+                    );
                     Ok(CliAction::Executed)
                 }
                 ShellCommands::Uninstall => {
@@ -368,8 +480,45 @@ where
                 Ok(CliAction::Executed)
             }
             Commands::Mcp { command } => match command {
-                McpCommands::Serve { http, port, token } => {
-                    handle_mcp_serve(http, port, token).await?;
+                McpCommands::Serve {
+                    http,
+                    port,
+                    token,
+                    agent,
+                }
+                | McpCommands::Start {
+                    http,
+                    port,
+                    token,
+                    agent,
+                } => {
+                    handle_mcp_serve(http, port, token, agent).await?;
+                    Ok(CliAction::Executed)
+                }
+                McpCommands::Connect { agent, force } | McpCommands::Install { agent, force } => {
+                    handle_mcp_connect(&agent, force).await?;
+                    Ok(CliAction::Executed)
+                }
+                McpCommands::Status { json } => {
+                    handle_mcp_status(json).await?;
+                    Ok(CliAction::Executed)
+                }
+                McpCommands::Tools { json } | McpCommands::List { json } => {
+                    handle_mcp_tools(json).await?;
+                    Ok(CliAction::Executed)
+                }
+                McpCommands::Logs {
+                    limit,
+                    session,
+                    agent,
+                    tool,
+                    status,
+                    full,
+                    clear,
+                    delete,
+                } => {
+                    handle_mcp_logs(limit, session, agent, tool, status, full, clear, delete)
+                        .await?;
                     Ok(CliAction::Executed)
                 }
             },
@@ -386,12 +535,18 @@ where
     }
 }
 
-pub async fn handle_init(_platform: Option<String>, framework: Option<String>) -> anyhow::Result<()> {
+pub async fn handle_init(
+    _platform: Option<String>,
+    framework: Option<String>,
+) -> anyhow::Result<()> {
     let current_dir = std::env::current_dir()?;
     let config_path = current_dir.join("devflow.toml");
 
     if config_path.exists() {
-        println!("{}", "devflow.toml already exists in current directory.".yellow());
+        println!(
+            "{}",
+            "devflow.toml already exists in current directory.".yellow()
+        );
         return Ok(());
     }
 
@@ -400,7 +555,9 @@ pub async fn handle_init(_platform: Option<String>, framework: Option<String>) -
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "my-app".to_string());
 
-    let fw_str = framework.unwrap_or_else(|| "generic".to_string()).to_lowercase();
+    let fw_str = framework
+        .unwrap_or_else(|| "generic".to_string())
+        .to_lowercase();
     let content = match fw_str.as_str() {
         "kotlin" | "android" => DevflowConfig::template_android(&project_name),
         "swift" | "swiftpm" | "macos" => DevflowConfig::template_swift(&project_name),
@@ -411,7 +568,11 @@ pub async fn handle_init(_platform: Option<String>, framework: Option<String>) -
     };
 
     std::fs::write(&config_path, content)?;
-    println!("{} Created {}", "✓".green().bold(), "devflow.toml".cyan().bold());
+    println!(
+        "{} Created {}",
+        "✓".green().bold(),
+        "devflow.toml".cyan().bold()
+    );
     println!("Edit devflow.toml to customize build, install, launch, and watch settings.");
     Ok(())
 }
@@ -435,22 +596,37 @@ pub async fn handle_doctor(project_path: PathBuf, json: bool) -> anyhow::Result<
             CheckStatus::Skipped => ("-".dimmed(), "SKIP".dimmed()),
         };
 
-        println!(" {} [{}] {} — {}", icon, status_str, check.name.bold(), check.message);
+        println!(
+            " {} [{}] {} — {}",
+            icon,
+            status_str,
+            check.name.bold(),
+            check.message
+        );
         if let Some(ref hint) = check.fix_hint {
             println!("     {} {}", "Fix hint:".magenta(), hint.dimmed());
         }
     }
 
-    println!("\nSummary: {} passed, {} warnings, {} failed",
+    println!(
+        "\nSummary: {} passed, {} warnings, {} failed",
         report.passed_count.to_string().green(),
         report.warning_count.to_string().yellow(),
         report.failure_count.to_string().red()
     );
 
     if report.is_healthy() {
-        println!("{}\n", "✓ Your development environment is ready!".green().bold());
+        println!(
+            "{}\n",
+            "✓ Your development environment is ready!".green().bold()
+        );
     } else {
-        println!("{}\n", "! Some required tools or configs are missing.".yellow().bold());
+        println!(
+            "{}\n",
+            "! Some required tools or configs are missing."
+                .yellow()
+                .bold()
+        );
     }
 
     Ok(())
@@ -473,29 +649,54 @@ pub async fn handle_devices(boot: Option<String>, json: bool) -> anyhow::Result<
         return Ok(());
     }
 
-    println!("\n{}", "═══ Discovered Devices & Emulators ═══".cyan().bold());
+    println!(
+        "\n{}",
+        "═══ Discovered Devices & Emulators ═══".cyan().bold()
+    );
     if devices.is_empty() {
         println!("{}", "No devices or emulators found.".yellow());
         return Ok(());
     }
 
     for (i, d) in devices.iter().enumerate() {
-        let default_badge = if d.is_default { " (default)".cyan() } else { "".normal() };
-        let emu_badge = if d.is_emulator { " [emulator/avd]".magenta() } else { "".normal() };
+        let default_badge = if d.is_default {
+            " (default)".cyan()
+        } else {
+            "".normal()
+        };
+        let emu_badge = if d.is_emulator {
+            " [emulator/avd]".magenta()
+        } else {
+            "".normal()
+        };
         let state_badge = match d.state {
-            devflow_protocol::DeviceState::Connected | devflow_protocol::DeviceState::Booted => "Connected".green(),
+            devflow_protocol::DeviceState::Connected | devflow_protocol::DeviceState::Booted => {
+                "Connected".green()
+            }
             devflow_protocol::DeviceState::Shutdown => "Shutdown (bootable)".yellow(),
             _ => format!("{}", d.state).dimmed(),
         };
 
-        println!(" {}. {} [ID: {}]{}{}", (i + 1).to_string().bold(), d.name.bold(), d.id.dimmed(), default_badge, emu_badge);
+        println!(
+            " {}. {} [ID: {}]{}{}",
+            (i + 1).to_string().bold(),
+            d.name.bold(),
+            d.id.dimmed(),
+            default_badge,
+            emu_badge
+        );
         println!("    Platform: {} | Status: {}", d.platform, state_badge);
     }
     println!();
     Ok(())
 }
 
-pub async fn handle_dev(target: Option<String>, framework: Option<String>, no_tui: bool, json: bool) -> anyhow::Result<()> {
+pub async fn handle_dev(
+    target: Option<String>,
+    framework: Option<String>,
+    no_tui: bool,
+    json: bool,
+) -> anyhow::Result<()> {
     let current_dir = std::env::current_dir()?;
     let event_bus = EventBus::default();
 
@@ -504,12 +705,17 @@ pub async fn handle_dev(target: Option<String>, framework: Option<String>, no_tu
         target.as_deref(),
         framework.as_deref(),
         event_bus.clone(),
-    ).await?;
+    )
+    .await?;
 
     let session_arc = Arc::new(session);
 
     if no_tui || json {
-        println!("{} Starting session in CLI mode for '{}'...", "⚡".cyan().bold(), session_arc.project.name.bold());
+        println!(
+            "{} Starting session in CLI mode for '{}'...",
+            "⚡".cyan().bold(),
+            session_arc.project.name.bold()
+        );
         let mut event_rx = event_bus.subscribe();
 
         tokio::spawn(async move {
@@ -522,21 +728,43 @@ pub async fn handle_dev(target: Option<String>, framework: Option<String>, no_tu
                             }
                         } else {
                             match evt {
-                                devflow_core::event::DevflowEvent::LogAppended { entry, .. } => {
+                                devflow_core::event::DevflowEvent::LogAppended {
+                                    entry, ..
+                                } => {
                                     let badge = match entry.level {
                                         LogLevel::E => "[ERR]".red().bold(),
                                         LogLevel::W => "[WRN]".yellow().bold(),
                                         LogLevel::I => "[INF]".green(),
                                         LogLevel::D => "[DBG]".dimmed(),
                                     };
-                                    let tag_str = entry.tag.as_deref().map(|t| format!(" [{}]", t)).unwrap_or_default();
+                                    let tag_str = entry
+                                        .tag
+                                        .as_deref()
+                                        .map(|t| format!(" [{}]", t))
+                                        .unwrap_or_default();
                                     println!("{} {}{}", badge, entry.message, tag_str.cyan());
                                 }
-                                devflow_core::event::DevflowEvent::SessionStateChanged { status, .. } => {
-                                    println!("{} State: {}", "⚡".cyan(), status.to_string().bold());
+                                devflow_core::event::DevflowEvent::SessionStateChanged {
+                                    status,
+                                    ..
+                                } => {
+                                    println!(
+                                        "{} State: {}",
+                                        "⚡".cyan(),
+                                        status.to_string().bold()
+                                    );
                                 }
-                                devflow_core::event::DevflowEvent::WatcherTriggered { action, paths, .. } => {
-                                    println!("{} File changed ({}) -> {:?}", "👁".yellow(), action, paths);
+                                devflow_core::event::DevflowEvent::WatcherTriggered {
+                                    action,
+                                    paths,
+                                    ..
+                                } => {
+                                    println!(
+                                        "{} File changed ({}) -> {:?}",
+                                        "👁".yellow(),
+                                        action,
+                                        paths
+                                    );
                                 }
                                 _ => {}
                             }
@@ -571,7 +799,8 @@ pub async fn handle_build(release: bool, target: Option<String>, json: bool) -> 
     let registry = FrameworkRegistry::new();
     let adapter = registry.select_adapter(&project);
 
-    let device = DeviceManager::find_best_match(Some(project.detected_platform), target.as_deref()).await;
+    let device =
+        DeviceManager::find_best_match(Some(project.detected_platform), target.as_deref()).await;
 
     let ctx = BuildContext {
         project_dir: project.root_dir.clone(),
@@ -580,7 +809,12 @@ pub async fn handle_build(release: bool, target: Option<String>, json: bool) -> 
         is_release: release,
     };
 
-    println!("{} Building project '{}' using {} adapter...", "🔨".cyan(), project.name.bold(), adapter.name().magenta());
+    println!(
+        "{} Building project '{}' using {} adapter...",
+        "🔨".cyan(),
+        project.name.bold(),
+        adapter.name().magenta()
+    );
     let res = adapter.build(&ctx).await?;
 
     if json {
@@ -589,7 +823,11 @@ pub async fn handle_build(release: bool, target: Option<String>, json: bool) -> 
     }
 
     if res.success {
-        println!("{} Build succeeded in {}ms", "✓".green().bold(), res.duration_ms);
+        println!(
+            "{} Build succeeded in {}ms",
+            "✓".green().bold(),
+            res.duration_ms
+        );
         if let Some(ref art) = res.artifact {
             println!("  {} {}", "Artifact:".cyan(), art.path.bold());
         }
@@ -630,9 +868,19 @@ pub async fn handle_logs(
             LogLevel::I => "[INF]".green(),
             LogLevel::D => "[DBG]".dimmed(),
         };
-        let tag_str = entry.tag.as_deref().map(|t| format!(" [{}]", t)).unwrap_or_default();
+        let tag_str = entry
+            .tag
+            .as_deref()
+            .map(|t| format!(" [{}]", t))
+            .unwrap_or_default();
         let time_str = entry.timestamp.format("%H:%M:%S%.3f").to_string();
-        println!("{} {} {}{}", time_str.dimmed(), badge, entry.message, tag_str.cyan());
+        println!(
+            "{} {} {}{}",
+            time_str.dimmed(),
+            badge,
+            entry.message,
+            tag_str.cyan()
+        );
     };
 
     let matches_filter = |entry: &LogEntry| -> bool {
@@ -642,7 +890,12 @@ pub async fn handle_logs(
             }
         }
         if let Some(ref t) = tag {
-            if !entry.tag.as_deref().map(|etag| etag.to_lowercase().contains(&t.to_lowercase())).unwrap_or(false) {
+            if !entry
+                .tag
+                .as_deref()
+                .map(|etag| etag.to_lowercase().contains(&t.to_lowercase()))
+                .unwrap_or(false)
+            {
                 return false;
             }
         }
@@ -660,7 +913,12 @@ pub async fn handle_logs(
             return Ok(());
         };
 
-        println!("{} Streaming logs from '{}' [{}] (bounded buffer, Ctrl+C to stop)...", "⚡".cyan().bold(), device.name.bold(), device.platform);
+        println!(
+            "{} Streaming logs from '{}' [{}] (bounded buffer, Ctrl+C to stop)...",
+            "⚡".cyan().bold(),
+            device.name.bold(),
+            device.platform
+        );
 
         let (log_tx, mut log_rx) = tokio::sync::mpsc::channel::<LogEntry>(512);
         let runner = PlatformRegistry::get_runner(device.platform);
@@ -691,7 +949,16 @@ pub async fn handle_logs(
                 };
                 let adb = AndroidPlatformRunner::resolve_adb();
                 let output = tokio::process::Command::new(&adb)
-                    .args(["-s", &device.id, "logcat", "-d", "-t", &fetch_count.to_string(), "-v", "time"])
+                    .args([
+                        "-s",
+                        &device.id,
+                        "logcat",
+                        "-d",
+                        "-t",
+                        &fetch_count.to_string(),
+                        "-v",
+                        "time",
+                    ])
                     .output()
                     .await;
 
@@ -728,8 +995,17 @@ pub async fn handle_logs(
 
 pub async fn handle_reload() -> anyhow::Result<()> {
     if let Some(session) = devflow_core::registry::GlobalRegistry::find_active_session(None) {
-        println!("{} Sending reload signal to active session '{}' (PID {})...", "⚡".cyan(), session.project_name.bold(), session.pid);
-        let resp = devflow_core::ipc::IpcClient::send_command(&session.socket_path, devflow_core::ipc::IpcRequest::Reload { files: vec![] }).await?;
+        println!(
+            "{} Sending reload signal to active session '{}' (PID {})...",
+            "⚡".cyan(),
+            session.project_name.bold(),
+            session.pid
+        );
+        let resp = devflow_core::ipc::IpcClient::send_command(
+            &session.socket_path,
+            devflow_core::ipc::IpcRequest::Reload { files: vec![] },
+        )
+        .await?;
         if resp.success {
             println!("{} {}", "✓".green().bold(), resp.message);
         } else {
@@ -743,8 +1019,17 @@ pub async fn handle_reload() -> anyhow::Result<()> {
 
 pub async fn handle_restart() -> anyhow::Result<()> {
     if let Some(session) = devflow_core::registry::GlobalRegistry::find_active_session(None) {
-        println!("{} Sending restart signal to active session '{}' (PID {})...", "⚡".cyan(), session.project_name.bold(), session.pid);
-        let resp = devflow_core::ipc::IpcClient::send_command(&session.socket_path, devflow_core::ipc::IpcRequest::Restart).await?;
+        println!(
+            "{} Sending restart signal to active session '{}' (PID {})...",
+            "⚡".cyan(),
+            session.project_name.bold(),
+            session.pid
+        );
+        let resp = devflow_core::ipc::IpcClient::send_command(
+            &session.socket_path,
+            devflow_core::ipc::IpcRequest::Restart,
+        )
+        .await?;
         if resp.success {
             println!("{} {}", "✓".green().bold(), resp.message);
         } else {
@@ -758,11 +1043,18 @@ pub async fn handle_restart() -> anyhow::Result<()> {
 
 pub async fn handle_preview() -> anyhow::Result<()> {
     let current_dir = std::env::current_dir()?;
-    TuiRunner::run_hub(current_dir).await.map_err(|e| anyhow::anyhow!("{}", e))
+    TuiRunner::run_hub(current_dir)
+        .await
+        .map_err(|e| anyhow::anyhow!("{}", e))
 }
 
-pub async fn handle_mcp_serve(http: bool, port: u16, token: Option<String>) -> anyhow::Result<()> {
-    let handler = Arc::new(McpHandler::new());
+pub async fn handle_mcp_serve(
+    http: bool,
+    port: u16,
+    token: Option<String>,
+    agent_hint: Option<String>,
+) -> anyhow::Result<()> {
+    let handler = Arc::new(McpHandler::new().with_client_hint(agent_hint));
 
     if http {
         let server = HttpServer::new(handler, port).with_auth(token);
@@ -775,18 +1067,421 @@ pub async fn handle_mcp_serve(http: bool, port: u16, token: Option<String>) -> a
     Ok(())
 }
 
+pub async fn handle_mcp_connect(agent: &str, force: bool) -> anyhow::Result<()> {
+    println!(
+        "\n{}",
+        "═══ DevFlow MCP AI Host Auto-Connector ═══".purple().bold()
+    );
+    let targets = mcp_connect::get_known_host_targets();
+
+    let filter = agent.to_lowercase();
+    let mut configured_count = 0;
+
+    for target in &targets {
+        let matches = match filter.as_str() {
+            "all" => true,
+            "claude" => target.name.to_lowercase().contains("claude"),
+            "cursor" => target.name.to_lowercase().contains("cursor"),
+            "antigravity" | "agy" => target.name.to_lowercase().contains("antigravity"),
+            "vscode" | "code" => target.name.to_lowercase().contains("vs code"),
+            other => target.name.to_lowercase().contains(other),
+        };
+
+        if matches {
+            match mcp_connect::configure_agent_target(target, force) {
+                Ok(msg) => {
+                    println!("  {} {}", "✓".green().bold(), msg);
+                    configured_count += 1;
+                }
+                Err(e) => {
+                    println!("  {} Failed for {}: {}", "✗".red().bold(), target.name, e);
+                }
+            }
+        }
+    }
+
+    if configured_count == 0 {
+        println!("  {}", format!("No matching AI hosts found for '{}'. Available: claude, cursor, antigravity, vscode, all", agent).yellow());
+    } else {
+        println!("\n{} Connected {} configuration file(s). Restart your AI agent to activate DevFlow MCP tools.", "⚡".cyan().bold(), configured_count);
+    }
+    println!();
+
+    // Persist to MCP log
+    let entry = devflow_mcp::McpAccessLogEntry::new(
+        "devflow-cli",
+        "cli/connect",
+        None,
+        None,
+        None,
+        Some(serde_json::json!({ "agent": agent, "force": force })),
+        Some(serde_json::json!({ "status": "ok", "configured_count": configured_count })),
+        1,
+        "success",
+        format!(
+            "Connected {} AI host configurations for '{}'",
+            configured_count, agent
+        ),
+        None,
+    );
+    devflow_mcp::append_entry_to_disk(&entry);
+
+    Ok(())
+}
+
+pub async fn handle_mcp_status(json_mode: bool) -> anyhow::Result<()> {
+    let tools = devflow_mcp::get_tool_definitions();
+    let active_sessions = devflow_core::registry::GlobalRegistry::list_active_sessions();
+
+    // Persist to MCP log
+    let entry = devflow_mcp::McpAccessLogEntry::new(
+        "devflow-cli",
+        "cli/status",
+        None,
+        None,
+        None,
+        None,
+        Some(serde_json::json!({
+            "tools_count": tools.len(),
+            "active_sessions_count": active_sessions.len()
+        })),
+        1,
+        "success",
+        format!(
+            "Checked MCP status: {} tools registered, {} active sessions",
+            tools.len(),
+            active_sessions.len()
+        ),
+        None,
+    );
+    devflow_mcp::append_entry_to_disk(&entry);
+
+    if json_mode {
+        let status = serde_json::json!({
+            "protocol_version": "2024-11-05",
+            "server_name": "devflow",
+            "version": env!("CARGO_PKG_VERSION"),
+            "tools_count": tools.len(),
+            "tools": tools,
+            "active_sessions_count": active_sessions.len(),
+            "active_sessions": active_sessions,
+        });
+        println!("{}", serde_json::to_string_pretty(&status)?);
+        return Ok(());
+    }
+
+    println!(
+        "\n{}",
+        "═══ DevFlow Model Context Protocol (MCP) Status ═══"
+            .purple()
+            .bold()
+    );
+    println!("  Protocol Version : {}", "2024-11-05".cyan());
+    println!("  Server Binary    : {}", "devflow mcp serve".green());
+    println!(
+        "  Available Tools  : {}",
+        format!("{} tools registered", tools.len()).bold()
+    );
+    println!(
+        "  Active Sessions  : {} running project target(s)",
+        active_sessions.len()
+    );
+    println!("\n{}", "Registered MCP Tools:".bold());
+    for t in &tools {
+        let name = t.get("name").and_then(|n| n.as_str()).unwrap_or("");
+        let desc = t.get("description").and_then(|d| d.as_str()).unwrap_or("");
+        println!("  • {} : {}", name.cyan().bold(), desc.dimmed());
+    }
+    println!(
+        "\nTip: Run '{}' to auto-configure Claude, Cursor, Antigravity, or VS Code.",
+        "devflow mcp connect all".bold()
+    );
+    println!(
+        "     Run '{}' to start the stdio server.\n",
+        "devflow mcp serve".bold()
+    );
+    Ok(())
+}
+
+pub async fn handle_mcp_tools(json_mode: bool) -> anyhow::Result<()> {
+    let tools = devflow_mcp::get_tool_definitions();
+
+    // Persist to MCP log
+    let entry = devflow_mcp::McpAccessLogEntry::new(
+        "devflow-cli",
+        "cli/tools",
+        None,
+        None,
+        None,
+        None,
+        Some(serde_json::json!({ "tools_count": tools.len() })),
+        1,
+        "success",
+        format!("Listed {} MCP tool definitions", tools.len()),
+        None,
+    );
+    devflow_mcp::append_entry_to_disk(&entry);
+
+    if json_mode {
+        println!("{}", serde_json::to_string_pretty(&tools)?);
+        return Ok(());
+    }
+
+    println!(
+        "\n{}",
+        "═══ DevFlow MCP Tool Catalog (11 Tools) ═══".cyan().bold()
+    );
+    for (i, t) in tools.iter().enumerate() {
+        let name = t.get("name").and_then(|n| n.as_str()).unwrap_or("");
+        let desc = t.get("description").and_then(|d| d.as_str()).unwrap_or("");
+        let schema = t.get("inputSchema");
+        let props = schema
+            .and_then(|s| s.get("properties"))
+            .and_then(|p| p.as_object());
+        let required = schema
+            .and_then(|s| s.get("required"))
+            .and_then(|r| r.as_array());
+
+        println!(
+            "\n[{}] {}",
+            (i + 1).to_string().bold(),
+            name.purple().bold()
+        );
+        println!("    {}", desc);
+        if let Some(props_map) = props {
+            if !props_map.is_empty() {
+                println!("    Parameters:");
+                for (pname, pinfo) in props_map {
+                    let ptype = pinfo.get("type").and_then(|v| v.as_str()).unwrap_or("any");
+                    let pdesc = pinfo
+                        .get("description")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let is_req =
+                        required.is_some_and(|reqs| reqs.iter().any(|r| r.as_str() == Some(pname)));
+                    let req_tag = if is_req {
+                        "[required]".red()
+                    } else {
+                        "[optional]".dimmed()
+                    };
+                    println!(
+                        "      - {} ({}) {}: {}",
+                        pname.cyan(),
+                        ptype,
+                        req_tag,
+                        pdesc
+                    );
+                }
+            } else {
+                println!("    No input parameters required");
+            }
+        }
+    }
+    println!();
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_mcp_logs(
+    limit: usize,
+    session: Option<String>,
+    agent: Option<String>,
+    tool: Option<String>,
+    status: Option<String>,
+    full: bool,
+    clear: bool,
+    delete: Option<String>,
+) -> anyhow::Result<()> {
+    if clear {
+        if let Some(ref sess) = session {
+            devflow_mcp::delete_access_logs_by_session(sess);
+            println!(
+                "{} Cleared all MCP logs for session '{}'.",
+                "✓".green().bold(),
+                sess.cyan()
+            );
+        } else {
+            devflow_mcp::clear_all_access_logs();
+            println!(
+                "{} Cleared all MCP logs from SQLite store.",
+                "✓".green().bold()
+            );
+        }
+        return Ok(());
+    }
+
+    if let Some(ref entry_id) = delete {
+        let deleted = devflow_mcp::delete_access_log(entry_id);
+        if deleted {
+            println!(
+                "{} Successfully deleted MCP log entry '{}'.",
+                "✓".green().bold(),
+                entry_id.cyan()
+            );
+        } else {
+            println!(
+                "{} MCP log entry '{}' not found.",
+                "!".yellow().bold(),
+                entry_id
+            );
+        }
+        return Ok(());
+    }
+
+    let filter = devflow_mcp::db::McpLogFilter {
+        limit: Some(limit),
+        session_id: session.clone(),
+        client: agent.clone(),
+        tool_name: tool.clone(),
+        status: status.clone(),
+        ..Default::default()
+    };
+
+    let entries = devflow_mcp::query_access_logs(&filter);
+
+    let mut filter_parts = Vec::new();
+    if let Some(ref s) = session {
+        filter_parts.push(format!("session: {}", s));
+    }
+    if let Some(ref a) = agent {
+        filter_parts.push(format!("agent: {}", a));
+    }
+    if let Some(ref t) = tool {
+        filter_parts.push(format!("tool: {}", t));
+    }
+    let filter_desc = if filter_parts.is_empty() {
+        String::new()
+    } else {
+        format!(" | {}", filter_parts.join(", "))
+    };
+    println!(
+        "\n{}",
+        format!(
+            "═══ DevFlow MCP Access & Trace Logs ({} entries{}) ═══",
+            entries.len(),
+            filter_desc
+        )
+        .purple()
+        .bold()
+    );
+    if entries.is_empty() {
+        println!(
+            "  {}",
+            "No matching MCP tool calls or CLI activities found.".dimmed()
+        );
+        println!("  Tip: Trigger tools via an AI host (Cursor, Claude, Antigravity) or run 'devflow mcp status'.\n");
+        return Ok(());
+    }
+
+    for (i, entry) in entries.iter().enumerate() {
+        let status_colored = if entry.status == "success" {
+            "✓ SUCCESS".green().bold()
+        } else {
+            "✗ FAILED".red().bold()
+        };
+        let target_label = entry.tool_name.as_deref().unwrap_or(&entry.method);
+        let session_label = entry.session_id.as_deref().unwrap_or("standalone");
+        let short_id = if entry.id.len() > 8 {
+            &entry.id[..8]
+        } else {
+            &entry.id
+        };
+
+        println!(
+            "[{}] {} | {} | {} ({}ms) [{}]",
+            (i + 1).to_string().dimmed(),
+            entry.timestamp.dimmed(),
+            status_colored,
+            target_label.cyan().bold(),
+            entry.duration_ms,
+            short_id.dimmed()
+        );
+        let client_colored = match entry.client.to_lowercase().as_str() {
+            c if c.contains("cursor") => entry.client.cyan().bold(),
+            c if c.contains("claude") => entry.client.yellow().bold(),
+            c if c.contains("antigravity") => entry.client.purple().bold(),
+            c if c.contains("code") => entry.client.blue().bold(),
+            _ => entry.client.green(),
+        };
+        println!(
+            "     Agent: {} | Session: {} | Path: {}",
+            client_colored,
+            session_label.bold(),
+            entry.project_path.as_deref().unwrap_or("-").dimmed()
+        );
+        println!("     Summary: {}", entry.summary);
+        if let Some(err) = &entry.error_message {
+            println!("     Error: {}", err.red());
+        }
+
+        if full {
+            if let Some(ref args) = entry.arguments {
+                if let Ok(formatted) = serde_json::to_string_pretty(args) {
+                    println!(
+                        "     Input Arguments:\n{}",
+                        formatted
+                            .lines()
+                            .map(|l| format!("       {}", l))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                            .dimmed()
+                    );
+                }
+            }
+            if let Some(ref resp) = entry.response {
+                if let Ok(formatted) = serde_json::to_string_pretty(resp) {
+                    println!(
+                        "     Output Response:\n{}",
+                        formatted
+                            .lines()
+                            .map(|l| format!("       {}", l))
+                            .collect::<Vec<_>>()
+                            .join("\n")
+                            .dimmed()
+                    );
+                }
+            }
+        }
+    }
+
+    println!();
+    if !full {
+        println!(
+            "  Tip: Add {} to view full input arguments & response payloads.",
+            "--full".cyan().bold()
+        );
+    }
+    println!(
+        "  Tip: Filter by session: {}, clear logs: {}, delete entry: {}\n",
+        "devflow mcp logs --session <id>".bold(),
+        "devflow mcp logs --clear".bold(),
+        "devflow mcp logs --delete <id>".bold()
+    );
+    Ok(())
+}
+
 pub async fn handle_hub_summary(current_dir: &std::path::Path) -> anyhow::Result<()> {
-    println!("\n{}", "═══ DevFlow Multi-Target Workspace Hub ═══".cyan().bold());
+    println!(
+        "\n{}",
+        "═══ DevFlow Multi-Target Workspace Hub ═══".cyan().bold()
+    );
     let folder_name = current_dir
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "workspace".to_string());
-    println!("Workspace: {} ({})", folder_name.bold(), current_dir.display().to_string().dimmed());
+    println!(
+        "Workspace: {} ({})",
+        folder_name.bold(),
+        current_dir.display().to_string().dimmed()
+    );
 
     let targets = Project::discover_workspace_targets(current_dir);
     println!("\n{}", "Runnable Targets:".bold());
     if targets.is_empty() {
-        println!("  {}", "No recognized framework targets found in this workspace.".yellow());
+        println!(
+            "  {}",
+            "No recognized framework targets found in this workspace.".yellow()
+        );
     } else {
         for (i, target) in targets.iter().enumerate() {
             println!(
@@ -803,7 +1498,10 @@ pub async fn handle_hub_summary(current_dir: &std::path::Path) -> anyhow::Result
     let sessions = devflow_core::registry::GlobalRegistry::list_active_sessions();
     println!("\n{}", "Active Sessions Across Terminals:".bold());
     if sessions.is_empty() {
-        println!("  {}", "No other active DevFlow sessions running on system.".dimmed());
+        println!(
+            "  {}",
+            "No other active DevFlow sessions running on system.".dimmed()
+        );
     } else {
         for s in &sessions {
             println!(
@@ -823,15 +1521,27 @@ pub async fn handle_hub_summary(current_dir: &std::path::Path) -> anyhow::Result
     } else {
         for d in &devices {
             let state_str = match d.state {
-                devflow_protocol::DeviceState::Connected | devflow_protocol::DeviceState::Booted => "ONLINE".green(),
+                devflow_protocol::DeviceState::Connected
+                | devflow_protocol::DeviceState::Booted => "ONLINE".green(),
                 _ => "OFFLINE".dimmed(),
             };
             let emu_str = if d.is_emulator { " [emulator]" } else { "" };
-            println!("  ○ {} [{:?}]{} ({})", d.name.bold(), d.platform, emu_str, state_str);
+            println!(
+                "  ○ {} [{:?}]{} ({})",
+                d.name.bold(),
+                d.platform,
+                emu_str,
+                state_str
+            );
         }
     }
 
-    println!("\n{}", "Tip: Run 'devflow' in an interactive terminal to launch the interactive TUI Hub.".dimmed());
-    println!("     Run 'devflow dev' to start live session, or 'devflow --help' for CLI commands.\n");
+    println!(
+        "\n{}",
+        "Tip: Run 'devflow' in an interactive terminal to launch the interactive TUI Hub.".dimmed()
+    );
+    println!(
+        "     Run 'devflow dev' to start live session, or 'devflow --help' for CLI commands.\n"
+    );
     Ok(())
 }

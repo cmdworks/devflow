@@ -45,9 +45,10 @@ impl SessionManager {
         let registry = FrameworkRegistry::new();
         let adapter = registry.select_adapter(&project);
 
-        let device = DeviceManager::find_best_match(Some(project.detected_platform), target_device_id)
-            .await
-            .unwrap_or_else(Device::host_desktop);
+        let device =
+            DeviceManager::find_best_match(Some(project.detected_platform), target_device_id)
+                .await
+                .unwrap_or_else(Device::host_desktop);
 
         let state = SessionState {
             session_id: session_id.clone(),
@@ -65,7 +66,12 @@ impl SessionManager {
             restart_count: 0,
         };
 
-        GlobalRegistry::record_project(&project.root_dir, &project.name, device.platform, adapter.name());
+        GlobalRegistry::record_project(
+            &project.root_dir,
+            &project.name,
+            device.platform,
+            adapter.name(),
+        );
 
         Ok(Self {
             project,
@@ -86,7 +92,14 @@ impl SessionManager {
         event_bus: EventBus,
     ) -> Result<Self> {
         let session_id = uuid::Uuid::new_v4().to_string();
-        Self::create_with_id(session_id, project_dir, target_device_id, framework_override, event_bus).await
+        Self::create_with_id(
+            session_id,
+            project_dir,
+            target_device_id,
+            framework_override,
+            event_bus,
+        )
+        .await
     }
 
     pub fn set_status(&self, status: SessionStatus) {
@@ -112,43 +125,47 @@ impl SessionManager {
     }
 
     pub async fn start_session(self: &Arc<Self>) -> Result<()> {
-        info!("Starting DevFlow session for project '{}' on device '{}'", self.project.name, self.device.name);
+        info!(
+            "Starting DevFlow session for project '{}' on device '{}'",
+            self.project.name, self.device.name
+        );
         self.set_status(SessionStatus::Building);
 
         // Register session with GlobalRegistry and start IPC server
-        let sock_path = GlobalRegistry::sessions_dir().join(format!("{}.sock", self.get_state().session_id));
+        let sock_path =
+            GlobalRegistry::sessions_dir().join(format!("{}.sock", self.get_state().session_id));
         GlobalRegistry::register_session(&self.get_state(), &sock_path);
 
         let session_self = self.clone();
         let ipc_server = IpcServer::new(&sock_path);
-        let _ = ipc_server.start(move |req| {
-            let s = session_self.clone();
-            async move {
-                match req {
-                    IpcRequest::Reload { files } => {
-                        let paths = files.into_iter().map(PathBuf::from).collect();
-                        match s.reload(paths).await {
-                            Ok(_) => IpcResponse::ok("Reload succeeded"),
-                            Err(e) => IpcResponse::err(format!("Reload failed: {}", e)),
+        let _ = ipc_server
+            .start(move |req| {
+                let s = session_self.clone();
+                async move {
+                    match req {
+                        IpcRequest::Reload { files } => {
+                            let paths = files.into_iter().map(PathBuf::from).collect();
+                            match s.reload(paths).await {
+                                Ok(_) => IpcResponse::ok("Reload succeeded"),
+                                Err(e) => IpcResponse::err(format!("Reload failed: {}", e)),
+                            }
                         }
-                    }
-                    IpcRequest::Restart => {
-                        match s.restart().await {
+                        IpcRequest::Restart => match s.restart().await {
                             Ok(_) => IpcResponse::ok("Restart succeeded"),
                             Err(e) => IpcResponse::err(format!("Restart failed: {}", e)),
+                        },
+                        IpcRequest::Status => {
+                            let st = s.get_state();
+                            IpcResponse::ok(serde_json::to_string(&st).unwrap_or_default())
+                        }
+                        IpcRequest::Stop => {
+                            let _ = s.stop().await;
+                            IpcResponse::ok("Session stopped")
                         }
                     }
-                    IpcRequest::Status => {
-                        let st = s.get_state();
-                        IpcResponse::ok(serde_json::to_string(&st).unwrap_or_default())
-                    }
-                    IpcRequest::Stop => {
-                        let _ = s.stop().await;
-                        IpcResponse::ok("Session stopped")
-                    }
                 }
-            }
-        }).await;
+            })
+            .await;
 
         let build_ctx = BuildContext {
             project_dir: self.project.root_dir.clone(),
@@ -164,7 +181,12 @@ impl SessionManager {
             project_name: self.project.name.clone(),
         });
 
-        let start_msg = format!("⚡ Starting build for '{}' [{}] on device '{}'...", self.project.name, self.adapter.name(), self.device.name);
+        let start_msg = format!(
+            "⚡ Starting build for '{}' [{}] on device '{}'...",
+            self.project.name,
+            self.adapter.name(),
+            self.device.name
+        );
         let mut start_entry = LogEntry::new(devflow_protocol::LogLevel::I, start_msg);
         start_entry.tag = Some("build".to_string());
         self.log_buffer.push(start_entry.clone());
@@ -191,7 +213,11 @@ impl SessionManager {
         // Stream compiler stderr lines
         for line in build_res.stderr.lines() {
             if !line.trim().is_empty() {
-                let lvl = if build_res.success { devflow_protocol::LogLevel::W } else { devflow_protocol::LogLevel::E };
+                let lvl = if build_res.success {
+                    devflow_protocol::LogLevel::W
+                } else {
+                    devflow_protocol::LogLevel::E
+                };
                 let mut entry = LogEntry::new(lvl, line);
                 entry.tag = Some("compiler".to_string());
                 self.log_buffer.push(entry.clone());
@@ -227,7 +253,13 @@ impl SessionManager {
                 });
             }
 
-            let fail_msg = format!("✗ Build failed in {}ms: {}", build_res.duration_ms, build_res.error_message.unwrap_or_else(|| "Unknown compiler error".to_string()));
+            let fail_msg = format!(
+                "✗ Build failed in {}ms: {}",
+                build_res.duration_ms,
+                build_res
+                    .error_message
+                    .unwrap_or_else(|| "Unknown compiler error".to_string())
+            );
             let mut fail_entry = LogEntry::new(devflow_protocol::LogLevel::E, fail_msg);
             fail_entry.tag = Some("build".to_string());
             self.log_buffer.push(fail_entry.clone());
@@ -303,12 +335,18 @@ impl SessionManager {
             let session_clone = self.clone();
             let watch_task = tokio::spawn(async move {
                 while let Some(change) = watch_rx.recv().await {
-                    let path_strings: Vec<String> = change.paths.iter().map(|p| p.to_string_lossy().to_string()).collect();
-                    session_clone.event_bus.publish(DevflowEvent::WatcherTriggered {
-                        session_id: session_clone.get_state().session_id,
-                        paths: path_strings,
-                        action: format!("{:?}", change.action),
-                    });
+                    let path_strings: Vec<String> = change
+                        .paths
+                        .iter()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .collect();
+                    session_clone
+                        .event_bus
+                        .publish(DevflowEvent::WatcherTriggered {
+                            session_id: session_clone.get_state().session_id,
+                            paths: path_strings,
+                            action: format!("{:?}", change.action),
+                        });
 
                     match change.action {
                         ChangeAction::Reload => {
@@ -356,7 +394,10 @@ impl SessionManager {
     }
 
     pub async fn restart(&self) -> Result<()> {
-        info!("Restarting target '{}' on device '{}'...", self.project.name, self.device.name);
+        info!(
+            "Restarting target '{}' on device '{}'...",
+            self.project.name, self.device.name
+        );
         self.set_status(SessionStatus::Restarting);
 
         let dev_ctx = DeviceContext {

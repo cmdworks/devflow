@@ -15,6 +15,7 @@ devflow_protocol = { path = "../../../crates/devflow_protocol" }
 devflow_devices = { path = "../../../crates/devflow_devices" }
 devflow_frameworks = { path = "../../../crates/devflow_frameworks" }
 devflow_logs = { path = "../../../crates/devflow_logs" }
+devflow_mcp = { path = "../../../crates/devflow_mcp" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dirs = "6.0"

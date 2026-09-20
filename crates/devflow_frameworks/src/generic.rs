@@ -28,7 +28,9 @@ impl GenericFrameworkAdapter {
             .current_dir(dir)
             .output()
             .await
-            .map_err(|e| DevflowError::ToolExecution(format!("Failed to execute '{}': {}", cmd_str, e)))?;
+            .map_err(|e| {
+                DevflowError::ToolExecution(format!("Failed to execute '{}': {}", cmd_str, e))
+            })?;
 
         let stdout = String::from_utf8_lossy(&child.stdout).to_string();
         let stderr = String::from_utf8_lossy(&child.stderr).to_string();
@@ -58,7 +60,12 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
         let build_cfg = match &ctx.config.build {
             Some(b) => b,
             None => {
-                return Ok(BuildResult::ok(0, None, "No build step configured".to_string(), String::new()));
+                return Ok(BuildResult::ok(
+                    0,
+                    None,
+                    "No build step configured".to_string(),
+                    String::new(),
+                ));
             }
         };
 
@@ -66,11 +73,15 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
         let expanded_cmd = ctx.config.expand_template(&build_cfg.command, target_id);
         info!("Executing build command: {}", expanded_cmd);
 
-        let (success, stdout, stderr) = Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
+        let (success, stdout, stderr) =
+            Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
         let duration = start.elapsed().as_millis() as u64;
 
         if success {
-            let artifact = build_cfg.artifact.as_ref().map(|a| ctx.config.expand_template(a, target_id));
+            let artifact = build_cfg
+                .artifact
+                .as_ref()
+                .map(|a| ctx.config.expand_template(a, target_id));
             Ok(BuildResult::ok(duration, artifact, stdout, stderr))
         } else {
             Ok(BuildResult::failed(
@@ -86,40 +97,62 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
         let platform_runner = PlatformRegistry::get_runner(ctx.device.platform);
 
         if let Some(install_cfg) = &ctx.config.install {
-            let expanded_cmd = ctx.config.expand_template(&install_cfg.command, Some(&ctx.device.id));
+            let expanded_cmd = ctx
+                .config
+                .expand_template(&install_cfg.command, Some(&ctx.device.id));
             info!("Executing custom install command: {}", expanded_cmd);
-            let (success, stdout, stderr) = Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
+            let (success, stdout, stderr) =
+                Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
             if !success {
-                return Err(DevflowError::Install(format!("Install failed: {}\n{}", stdout, stderr)));
+                return Err(DevflowError::Install(format!(
+                    "Install failed: {}\n{}",
+                    stdout, stderr
+                )));
             }
             Ok(())
         } else {
-            platform_runner.install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref()).await
+            platform_runner
+                .install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref())
+                .await
         }
     }
 
     async fn launch(&self, ctx: &DeviceContext) -> Result<()> {
-        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
+        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop
+            || ctx.device.platform == devflow_protocol::Platform::Generic
+        {
             self.runner.clone()
         } else {
             PlatformRegistry::get_runner(ctx.device.platform)
         };
 
         if let Some(launch_cfg) = &ctx.config.launch {
-            let expanded_cmd = ctx.config.expand_template(&launch_cfg.command, Some(&ctx.device.id));
+            let expanded_cmd = ctx
+                .config
+                .expand_template(&launch_cfg.command, Some(&ctx.device.id));
             info!("Executing launch command: {}", expanded_cmd);
 
-            if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
-                platform_runner.launch(&ctx.project_dir, &ctx.device, Some(&expanded_cmd)).await
+            if ctx.device.platform == devflow_protocol::Platform::Desktop
+                || ctx.device.platform == devflow_protocol::Platform::Generic
+            {
+                platform_runner
+                    .launch(&ctx.project_dir, &ctx.device, Some(&expanded_cmd))
+                    .await
             } else {
-                let (success, stdout, stderr) = Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
+                let (success, stdout, stderr) =
+                    Self::run_shell_command(&expanded_cmd, &ctx.project_dir).await?;
                 if !success {
-                    return Err(DevflowError::Launch(format!("Launch failed: {}\n{}", stdout, stderr)));
+                    return Err(DevflowError::Launch(format!(
+                        "Launch failed: {}\n{}",
+                        stdout, stderr
+                    )));
                 }
                 Ok(())
             }
         } else if let Some(artifact) = &ctx.artifact_path {
-            platform_runner.launch(&ctx.project_dir, &ctx.device, Some(artifact)).await
+            platform_runner
+                .launch(&ctx.project_dir, &ctx.device, Some(artifact))
+                .await
         } else {
             Ok(())
         }
@@ -127,7 +160,9 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Stopping generic application on device {}", ctx.device.name);
-        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
+        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop
+            || ctx.device.platform == devflow_protocol::Platform::Generic
+        {
             self.runner.clone()
         } else {
             PlatformRegistry::get_runner(ctx.device.platform)
@@ -148,7 +183,9 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
 
     async fn restart(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Restarting application on device {}", ctx.device.name);
-        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
+        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop
+            || ctx.device.platform == devflow_protocol::Platform::Generic
+        {
             self.runner.clone()
         } else {
             PlatformRegistry::get_runner(ctx.device.platform)
@@ -158,13 +195,21 @@ impl FrameworkAdapter for GenericFrameworkAdapter {
         self.launch(ctx).await
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
-        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop || ctx.device.platform == devflow_protocol::Platform::Generic {
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        let platform_runner = if ctx.device.platform == devflow_protocol::Platform::Desktop
+            || ctx.device.platform == devflow_protocol::Platform::Generic
+        {
             self.runner.clone()
         } else {
             PlatformRegistry::get_runner(ctx.device.platform)
         };
 
-        platform_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await
+        platform_runner
+            .stream_logs(&ctx.project_dir, &ctx.device, tx)
+            .await
     }
 }

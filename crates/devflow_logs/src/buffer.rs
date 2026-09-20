@@ -43,7 +43,12 @@ impl LogBuffer {
 
     /// Retrieve a window of logs matching filter with offset from the end for scrollback.
     /// Returns (entries in chronological order, total_matched_count).
-    pub fn query_window(&self, filter: &LogFilter, offset: usize, limit: usize) -> (Vec<LogEntry>, usize) {
+    pub fn query_window(
+        &self,
+        filter: &LogFilter,
+        offset: usize,
+        limit: usize,
+    ) -> (Vec<LogEntry>, usize) {
         let list = self.entries.read().unwrap();
         let matched: Vec<&LogEntry> = list.iter().filter(|e| filter.matches(e)).collect();
         let total = matched.len();
@@ -81,7 +86,6 @@ impl LogBuffer {
         let mut list = self.entries.write().unwrap();
         list.clear();
     }
-
 
     pub fn len(&self) -> usize {
         self.entries.read().unwrap().len()
@@ -154,4 +158,3 @@ mod tests {
         assert_eq!(window[2].message, "Log line 5");
     }
 }
-

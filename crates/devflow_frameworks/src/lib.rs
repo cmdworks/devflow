@@ -19,4 +19,3 @@ pub use session::SessionManager;
 pub use swift::SwiftFrameworkAdapter;
 pub use tauri::TauriFrameworkAdapter;
 pub use xcode::XcodeAdapter;
-

@@ -1,7 +1,9 @@
 use crate::adapter::{BuildContext, DeviceContext, FrameworkAdapter, ReloadContext};
 use async_trait::async_trait;
 use devflow_core::error::{DevflowError, Result};
-use devflow_platforms::{AndroidPlatformRunner, ApplePlatformRunner, DesktopPlatformRunner, PlatformRunner};
+use devflow_platforms::{
+    AndroidPlatformRunner, ApplePlatformRunner, DesktopPlatformRunner, PlatformRunner,
+};
 use devflow_protocol::{BuildResult, LogEntry, Platform};
 use std::path::Path;
 use std::sync::Arc;
@@ -55,9 +57,16 @@ impl FrameworkAdapter for FlutterFrameworkAdapter {
         let cmd_str = if let Some(ref b) = ctx.config.build {
             b.command.clone()
         } else {
-            match ctx.target_device.as_ref().map(|d| d.platform).unwrap_or(Platform::Android) {
+            match ctx
+                .target_device
+                .as_ref()
+                .map(|d| d.platform)
+                .unwrap_or(Platform::Android)
+            {
                 Platform::Android => "flutter build apk --debug".to_string(),
-                Platform::Apple | Platform::Ios => "flutter build ios --simulator --debug".to_string(),
+                Platform::Apple | Platform::Ios => {
+                    "flutter build ios --simulator --debug".to_string()
+                }
                 Platform::Macos | Platform::Desktop => "flutter build macos --debug".to_string(),
                 _ => "flutter build apk --debug".to_string(),
             }
@@ -66,8 +75,9 @@ impl FrameworkAdapter for FlutterFrameworkAdapter {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", &cmd_str]).current_dir(&ctx.project_dir);
 
-        let output = cmd.output().await
-            .map_err(|e| DevflowError::Build(format!("Failed to run Flutter build '{}': {}", cmd_str, e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DevflowError::Build(format!("Failed to run Flutter build '{}': {}", cmd_str, e))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -87,27 +97,71 @@ impl FrameworkAdapter for FlutterFrameworkAdapter {
 
     async fn install(&self, ctx: &DeviceContext) -> Result<()> {
         match ctx.device.platform {
-            Platform::Android => self.android_runner.install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref()).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref()).await,
+            Platform::Android => {
+                self.android_runner
+                    .install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref())
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref())
+                    .await
+            }
             _ => Ok(()),
         }
     }
 
     async fn launch(&self, ctx: &DeviceContext) -> Result<()> {
-        info!("Launching Flutter app on device {} ({})", ctx.device.id, ctx.device.platform);
+        info!(
+            "Launching Flutter app on device {} ({})",
+            ctx.device.id, ctx.device.platform
+        );
         match ctx.device.platform {
-            Platform::Android => self.android_runner.launch(&ctx.project_dir, &ctx.device, ctx.config.project.package_id.as_deref()).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.launch(&ctx.project_dir, &ctx.device, ctx.config.project.package_id.as_deref()).await,
-            _ => self.desktop_runner.launch(&ctx.project_dir, &ctx.device, None).await,
+            Platform::Android => {
+                self.android_runner
+                    .launch(
+                        &ctx.project_dir,
+                        &ctx.device,
+                        ctx.config.project.package_id.as_deref(),
+                    )
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .launch(
+                        &ctx.project_dir,
+                        &ctx.device,
+                        ctx.config.project.package_id.as_deref(),
+                    )
+                    .await
+            }
+            _ => {
+                self.desktop_runner
+                    .launch(&ctx.project_dir, &ctx.device, None)
+                    .await
+            }
         }
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
-        info!("Stopping Flutter application on device {} ({})", ctx.device.id, ctx.device.platform);
+        info!(
+            "Stopping Flutter application on device {} ({})",
+            ctx.device.id, ctx.device.platform
+        );
         match ctx.device.platform {
-            Platform::Android => self.android_runner.stop(&ctx.project_dir, &ctx.device).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.stop(&ctx.project_dir, &ctx.device).await,
-            _ => self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await,
+            Platform::Android => {
+                self.android_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner.stop(&ctx.project_dir, &ctx.device).await
+            }
+            _ => {
+                self.desktop_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await
+            }
         }
     }
 
@@ -121,7 +175,10 @@ impl FrameworkAdapter for FlutterFrameworkAdapter {
             device: ctx.device.clone(),
             artifact_path: None,
         };
-        info!("Performing rapid Hot Reload for {} changed files", ctx.changed_files.len());
+        info!(
+            "Performing rapid Hot Reload for {} changed files",
+            ctx.changed_files.len()
+        );
         // If hot reload not attached directly, fallback to restart
         self.restart(&dev_ctx).await
     }
@@ -130,25 +187,47 @@ impl FrameworkAdapter for FlutterFrameworkAdapter {
         info!("Restarting Flutter app (Hot Restart 'R')...");
         match ctx.device.platform {
             Platform::Android => {
-                self.android_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.android_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
             Platform::Apple | Platform::Ios => {
-                self.apple_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.apple_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
             _ => {
-                self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.desktop_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
         }
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         match ctx.device.platform {
-            Platform::Android => self.android_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
-            _ => self.desktop_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
+            Platform::Android => {
+                self.android_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
+            _ => {
+                self.desktop_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
         }
     }
 }

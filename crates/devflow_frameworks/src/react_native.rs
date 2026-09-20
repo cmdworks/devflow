@@ -1,7 +1,9 @@
 use crate::adapter::{BuildContext, DeviceContext, FrameworkAdapter, ReloadContext};
 use async_trait::async_trait;
 use devflow_core::error::{DevflowError, Result};
-use devflow_platforms::{AndroidPlatformRunner, ApplePlatformRunner, DesktopPlatformRunner, PlatformRunner};
+use devflow_platforms::{
+    AndroidPlatformRunner, ApplePlatformRunner, DesktopPlatformRunner, PlatformRunner,
+};
 use devflow_protocol::{BuildResult, LogEntry, Platform};
 use std::path::Path;
 use std::sync::Arc;
@@ -35,7 +37,10 @@ async fn reqwest_like_ping(port: u16) -> bool {
     let addr = format!("127.0.0.1:{}", port);
     if let Ok(mut stream) = tokio::net::TcpStream::connect(&addr).await {
         use tokio::io::AsyncWriteExt;
-        let req = format!("GET /reload HTTP/1.1\r\nHost: localhost:{}\r\nConnection: close\r\n\r\n", port);
+        let req = format!(
+            "GET /reload HTTP/1.1\r\nHost: localhost:{}\r\nConnection: close\r\n\r\n",
+            port
+        );
         let _ = stream.write_all(req.as_bytes()).await;
         return true;
     }
@@ -71,7 +76,10 @@ impl FrameworkAdapter for ReactNativeFrameworkAdapter {
 
     async fn build(&self, ctx: &BuildContext) -> Result<BuildResult> {
         let start = Instant::now();
-        info!("Building React Native project in {}", ctx.project_dir.display());
+        info!(
+            "Building React Native project in {}",
+            ctx.project_dir.display()
+        );
 
         let cmd_str = if let Some(ref b) = ctx.config.build {
             b.command.clone()
@@ -82,8 +90,12 @@ impl FrameworkAdapter for ReactNativeFrameworkAdapter {
         let mut cmd = Command::new("sh");
         cmd.args(["-c", &cmd_str]).current_dir(&ctx.project_dir);
 
-        let output = cmd.output().await
-            .map_err(|e| DevflowError::Build(format!("Failed to run React Native build '{}': {}", cmd_str, e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DevflowError::Build(format!(
+                "Failed to run React Native build '{}': {}",
+                cmd_str, e
+            ))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -103,29 +115,70 @@ impl FrameworkAdapter for ReactNativeFrameworkAdapter {
 
     async fn install(&self, ctx: &DeviceContext) -> Result<()> {
         match ctx.device.platform {
-            Platform::Android => self.android_runner.install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref()).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref()).await,
+            Platform::Android => {
+                self.android_runner
+                    .install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref())
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .install(&ctx.project_dir, &ctx.device, ctx.artifact_path.as_deref())
+                    .await
+            }
             _ => Ok(()),
         }
     }
 
     async fn launch(&self, ctx: &DeviceContext) -> Result<()> {
-        let package_id = ctx.config.project.package_id.as_deref().unwrap_or("com.example.app");
-        info!("Launching React Native app on device {} ({})", ctx.device.id, ctx.device.platform);
+        let package_id = ctx
+            .config
+            .project
+            .package_id
+            .as_deref()
+            .unwrap_or("com.example.app");
+        info!(
+            "Launching React Native app on device {} ({})",
+            ctx.device.id, ctx.device.platform
+        );
 
         match ctx.device.platform {
-            Platform::Android => self.android_runner.launch(&ctx.project_dir, &ctx.device, Some(package_id)).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.launch(&ctx.project_dir, &ctx.device, Some(package_id)).await,
-            _ => self.desktop_runner.launch(&ctx.project_dir, &ctx.device, None).await,
+            Platform::Android => {
+                self.android_runner
+                    .launch(&ctx.project_dir, &ctx.device, Some(package_id))
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .launch(&ctx.project_dir, &ctx.device, Some(package_id))
+                    .await
+            }
+            _ => {
+                self.desktop_runner
+                    .launch(&ctx.project_dir, &ctx.device, None)
+                    .await
+            }
         }
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
-        info!("Stopping React Native application on device {} ({})", ctx.device.id, ctx.device.platform);
+        info!(
+            "Stopping React Native application on device {} ({})",
+            ctx.device.id, ctx.device.platform
+        );
         match ctx.device.platform {
-            Platform::Android => self.android_runner.stop(&ctx.project_dir, &ctx.device).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.stop(&ctx.project_dir, &ctx.device).await,
-            _ => self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await,
+            Platform::Android => {
+                self.android_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner.stop(&ctx.project_dir, &ctx.device).await
+            }
+            _ => {
+                self.desktop_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await
+            }
         }
     }
 
@@ -161,25 +214,47 @@ impl FrameworkAdapter for ReactNativeFrameworkAdapter {
         info!("Restarting React Native app...");
         match ctx.device.platform {
             Platform::Android => {
-                self.android_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.android_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
             Platform::Apple | Platform::Ios => {
-                self.apple_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.apple_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
             _ => {
-                self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await?;
+                self.desktop_runner
+                    .stop(&ctx.project_dir, &ctx.device)
+                    .await?;
                 self.launch(ctx).await
             }
         }
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         match ctx.device.platform {
-            Platform::Android => self.android_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
-            Platform::Apple | Platform::Ios => self.apple_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
-            _ => self.desktop_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await,
+            Platform::Android => {
+                self.android_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
+            Platform::Apple | Platform::Ios => {
+                self.apple_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
+            _ => {
+                self.desktop_runner
+                    .stream_logs(&ctx.project_dir, &ctx.device, tx)
+                    .await
+            }
         }
     }
 }

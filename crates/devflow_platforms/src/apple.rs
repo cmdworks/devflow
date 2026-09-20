@@ -33,8 +33,15 @@ impl Default for ApplePlatformRunner {
 
 #[async_trait]
 impl PlatformRunner for ApplePlatformRunner {
-    async fn install(&self, _project_dir: &Path, device: &Device, artifact_path: Option<&str>) -> Result<()> {
-        let artifact = artifact_path.ok_or_else(|| DevflowError::Install("No artifact path specified for Apple install".to_string()))?;
+    async fn install(
+        &self,
+        _project_dir: &Path,
+        device: &Device,
+        artifact_path: Option<&str>,
+    ) -> Result<()> {
+        let artifact = artifact_path.ok_or_else(|| {
+            DevflowError::Install("No artifact path specified for Apple install".to_string())
+        })?;
         info!("Installing app {} on device {}", artifact, device.id);
 
         if device.is_emulator {
@@ -43,34 +50,62 @@ impl PlatformRunner for ApplePlatformRunner {
                 .args(["simctl", "install", &device.id, artifact])
                 .output()
                 .await
-                .map_err(|e| DevflowError::Install(format!("xcrun simctl install failed: {}", e)))?;
+                .map_err(|e| {
+                    DevflowError::Install(format!("xcrun simctl install failed: {}", e))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(DevflowError::Install(format!("simctl install failed: {}", stderr)));
+                return Err(DevflowError::Install(format!(
+                    "simctl install failed: {}",
+                    stderr
+                )));
             }
         } else if device.platform == Platform::Ios || device.platform == Platform::Apple {
             // Physical iOS device install via xcrun devicectl (iOS 17+)
             let output = Command::new("xcrun")
-                .args(["devicectl", "device", "install", "app", "--device", &device.id, artifact])
+                .args([
+                    "devicectl",
+                    "device",
+                    "install",
+                    "app",
+                    "--device",
+                    &device.id,
+                    artifact,
+                ])
                 .output()
                 .await
-                .map_err(|e| DevflowError::Install(format!("xcrun devicectl install failed: {}", e)))?;
+                .map_err(|e| {
+                    DevflowError::Install(format!("xcrun devicectl install failed: {}", e))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(DevflowError::Install(format!("devicectl install failed: {}", stderr)));
+                return Err(DevflowError::Install(format!(
+                    "devicectl install failed: {}",
+                    stderr
+                )));
             }
         }
 
         Ok(())
     }
 
-    async fn launch(&self, project_dir: &Path, device: &Device, launch_cmd: Option<&str>) -> Result<()> {
+    async fn launch(
+        &self,
+        project_dir: &Path,
+        device: &Device,
+        launch_cmd: Option<&str>,
+    ) -> Result<()> {
         self.stop(project_dir, device).await?;
 
-        let launch_arg = launch_cmd.ok_or_else(|| DevflowError::Launch("No bundle id or app path specified for launch".to_string()))?;
-        info!("Launching Apple app {} on device {} ({})", launch_arg, device.name, device.platform);
+        let launch_arg = launch_cmd.ok_or_else(|| {
+            DevflowError::Launch("No bundle id or app path specified for launch".to_string())
+        })?;
+        info!(
+            "Launching Apple app {} on device {} ({})",
+            launch_arg, device.name, device.platform
+        );
 
         let mut b_lock = self.active_bundle_id.lock().await;
         *b_lock = Some(launch_arg.to_string());
@@ -84,18 +119,34 @@ impl PlatformRunner for ApplePlatformRunner {
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(DevflowError::Launch(format!("simctl launch failed: {}", stderr)));
+                return Err(DevflowError::Launch(format!(
+                    "simctl launch failed: {}",
+                    stderr
+                )));
             }
         } else if device.platform == Platform::Ios || device.platform == Platform::Apple {
             let output = Command::new("xcrun")
-                .args(["devicectl", "device", "process", "launch", "--device", &device.id, launch_arg])
+                .args([
+                    "devicectl",
+                    "device",
+                    "process",
+                    "launch",
+                    "--device",
+                    &device.id,
+                    launch_arg,
+                ])
                 .output()
                 .await
-                .map_err(|e| DevflowError::Launch(format!("xcrun devicectl launch failed: {}", e)))?;
+                .map_err(|e| {
+                    DevflowError::Launch(format!("xcrun devicectl launch failed: {}", e))
+                })?;
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                return Err(DevflowError::Launch(format!("devicectl launch failed: {}", stderr)));
+                return Err(DevflowError::Launch(format!(
+                    "devicectl launch failed: {}",
+                    stderr
+                )));
             }
         } else {
             // macOS Desktop target:
@@ -126,7 +177,13 @@ impl PlatformRunner for ApplePlatformRunner {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped())
                 .spawn()
-                .map_err(|e| DevflowError::Launch(format!("Failed to spawn macOS app '{}': {}", executable.display(), e)))?;
+                .map_err(|e| {
+                    DevflowError::Launch(format!(
+                        "Failed to spawn macOS app '{}': {}",
+                        executable.display(),
+                        e
+                    ))
+                })?;
 
             let mut c_lock = self.active_child.lock().await;
             *c_lock = Some(child);
@@ -149,7 +206,15 @@ impl PlatformRunner for ApplePlatformRunner {
         } else if device.platform == Platform::Ios || device.platform == Platform::Apple {
             if let Some(ref bid) = bundle_id {
                 let _ = Command::new("xcrun")
-                    .args(["devicectl", "device", "process", "terminate", "--device", &device.id, bid])
+                    .args([
+                        "devicectl",
+                        "device",
+                        "process",
+                        "terminate",
+                        "--device",
+                        &device.id,
+                        bid,
+                    ])
                     .output()
                     .await;
             }
@@ -187,7 +252,12 @@ impl PlatformRunner for ApplePlatformRunner {
         Ok(())
     }
 
-    async fn stream_logs(&self, _project_dir: &Path, device: &Device, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
+    async fn stream_logs(
+        &self,
+        _project_dir: &Path,
+        device: &Device,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         let device_id = device.id.clone();
         let is_sim = device.is_emulator;
 
@@ -198,7 +268,9 @@ impl PlatformRunner for ApplePlatformRunner {
         let handle = tokio::spawn(async move {
             if is_sim {
                 let mut child = match Command::new("xcrun")
-                    .args(["simctl", "spawn", &device_id, "log", "stream", "--style", "compact"])
+                    .args([
+                        "simctl", "spawn", &device_id, "log", "stream", "--style", "compact",
+                    ])
                     .stdout(Stdio::piped())
                     .stderr(Stdio::null())
                     .spawn()

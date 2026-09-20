@@ -42,7 +42,11 @@ impl SwiftFrameworkAdapter {
         None
     }
 
-    pub fn package_macos_app(bin_path: &Path, app_name: &str, output_dir: &Path) -> std::io::Result<PathBuf> {
+    pub fn package_macos_app(
+        bin_path: &Path,
+        app_name: &str,
+        output_dir: &Path,
+    ) -> std::io::Result<PathBuf> {
         let app_bundle = output_dir.join(format!("{}.app", app_name));
         let contents = app_bundle.join("Contents");
         let macos_dir = contents.join("MacOS");
@@ -106,7 +110,9 @@ impl FrameworkAdapter for SwiftFrameworkAdapter {
             cmd.args(["-c", "release"]);
         }
 
-        let output = cmd.output().await
+        let output = cmd
+            .output()
+            .await
             .map_err(|e| DevflowError::Build(format!("Failed to run swift build: {}", e)))?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
@@ -115,11 +121,19 @@ impl FrameworkAdapter for SwiftFrameworkAdapter {
 
         if output.status.success() {
             let target_config = if ctx.is_release { "release" } else { "debug" };
-            let artifact_path = Self::find_built_binary(&ctx.project_dir, ctx.is_release, &ctx.config.project.name)
-                .map(|p| p.to_string_lossy().to_string())
-                .unwrap_or_else(|| format!(".build/{}/{}", target_config, ctx.config.project.name));
+            let artifact_path =
+                Self::find_built_binary(&ctx.project_dir, ctx.is_release, &ctx.config.project.name)
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_else(|| {
+                        format!(".build/{}/{}", target_config, ctx.config.project.name)
+                    });
 
-            Ok(BuildResult::ok(duration, Some(artifact_path), stdout, stderr))
+            Ok(BuildResult::ok(
+                duration,
+                Some(artifact_path),
+                stdout,
+                stderr,
+            ))
         } else {
             Ok(BuildResult::failed(
                 duration,
@@ -138,12 +152,16 @@ impl FrameworkAdapter for SwiftFrameworkAdapter {
         let default_bin = format!("./.build/debug/{}", ctx.config.project.name);
         let bin_path = ctx.artifact_path.as_deref().unwrap_or(&default_bin);
         info!("Launching Swift executable: {}", bin_path);
-        self.desktop_runner.launch(&ctx.project_dir, &ctx.device, Some(bin_path)).await
+        self.desktop_runner
+            .launch(&ctx.project_dir, &ctx.device, Some(bin_path))
+            .await
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Stopping Swift application...");
-        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await
+        self.desktop_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await
     }
 
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
@@ -157,11 +175,19 @@ impl FrameworkAdapter for SwiftFrameworkAdapter {
     }
 
     async fn restart(&self, ctx: &DeviceContext) -> Result<()> {
-        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await?;
+        self.desktop_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await?;
         self.launch(ctx).await
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
-        self.desktop_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        self.desktop_runner
+            .stream_logs(&ctx.project_dir, &ctx.device, tx)
+            .await
     }
 }

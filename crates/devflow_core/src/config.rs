@@ -105,7 +105,13 @@ fn default_watch_paths() -> Vec<String> {
 }
 
 fn default_watch_extensions() -> Vec<String> {
-    vec!["rs".to_string(), "kt".to_string(), "swift".to_string(), "ts".to_string(), "js".to_string()]
+    vec![
+        "rs".to_string(),
+        "kt".to_string(),
+        "swift".to_string(),
+        "ts".to_string(),
+        "js".to_string(),
+    ]
 }
 
 fn default_watch_action() -> String {
@@ -129,12 +135,17 @@ impl Default for WatchConfig {
 
 impl DevflowConfig {
     pub fn load_from_file(path: impl AsRef<Path>) -> Result<Self> {
-        let content = std::fs::read_to_string(path.as_ref())
-            .map_err(|e| DevflowError::Config(format!("Failed to read config file {}: {}", path.as_ref().display(), e)))?;
-        
+        let content = std::fs::read_to_string(path.as_ref()).map_err(|e| {
+            DevflowError::Config(format!(
+                "Failed to read config file {}: {}",
+                path.as_ref().display(),
+                e
+            ))
+        })?;
+
         let config: DevflowConfig = toml::from_str(&content)
             .map_err(|e| DevflowError::Config(format!("Failed to parse TOML config: {}", e)))?;
-        
+
         Ok(config)
     }
 
@@ -353,11 +364,17 @@ debounce_ms = 400
 
         let build = config.build.as_ref().unwrap();
         assert_eq!(build.command, "./gradlew assembleDebug");
-        assert_eq!(build.artifact.as_deref().unwrap(), "app/build/outputs/apk/debug/app-debug.apk");
+        assert_eq!(
+            build.artifact.as_deref().unwrap(),
+            "app/build/outputs/apk/debug/app-debug.apk"
+        );
 
         let install = config.install.as_ref().unwrap();
         let expanded = config.expand_template(&install.command, Some("emulator-5554"));
-        assert_eq!(expanded, "adb install -r app/build/outputs/apk/debug/app-debug.apk");
+        assert_eq!(
+            expanded,
+            "adb install -r app/build/outputs/apk/debug/app-debug.apk"
+        );
 
         let watch = config.watch.as_ref().unwrap();
         assert_eq!(watch.paths, vec!["app/src"]);
@@ -373,4 +390,3 @@ debounce_ms = 400
         assert!(generic_tpl.contains("platform = \"desktop\""));
     }
 }
-

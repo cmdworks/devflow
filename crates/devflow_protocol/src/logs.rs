@@ -115,7 +115,11 @@ impl LogFilter {
             if !query.is_empty() {
                 let q_lower = query.to_lowercase();
                 let msg_match = entry.message.to_lowercase().contains(&q_lower);
-                let tag_match = entry.tag.as_ref().map(|t| t.to_lowercase().contains(&q_lower)).unwrap_or(false);
+                let tag_match = entry
+                    .tag
+                    .as_ref()
+                    .map(|t| t.to_lowercase().contains(&q_lower))
+                    .unwrap_or(false);
                 if !msg_match && !tag_match {
                     return false;
                 }

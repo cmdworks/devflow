@@ -4,6 +4,23 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version tag (e.g. v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+        type: string
+      draft:
+        description: 'Create as a draft release'
+        required: false
+        default: false
+        type: boolean
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   build-release:
@@ -15,20 +32,24 @@ jobs:
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
-            binary_name: devflow
-            asset_name: devflow-macos-arm64.tar.gz
+            cli_asset: devflow-cli-macos-arm64.tar.gz
+            gui_asset: devflow-gui-macos-arm64.tar.gz
+            build_gui: true
           - os: macos-13
             target: x86_64-apple-darwin
-            binary_name: devflow
-            asset_name: devflow-macos-x86_64.tar.gz
+            cli_asset: devflow-cli-macos-x86_64.tar.gz
+            gui_asset: devflow-gui-macos-x86_64.tar.gz
+            build_gui: true
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            binary_name: devflow
-            asset_name: devflow-linux-x86_64.tar.gz
+            cli_asset: devflow-cli-linux-x86_64.tar.gz
+            gui_asset: devflow-gui-linux-x86_64.tar.gz
+            build_gui: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            binary_name: devflow
-            asset_name: devflow-linux-aarch64.tar.gz
+            cli_asset: devflow-cli-linux-aarch64.tar.gz
+            gui_asset: ''
+            build_gui: false
 
     steps:
       - uses: actions/checkout@v4
@@ -38,30 +59,105 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Setup Node.js (for Desktop Companion GUI)
+        if: matrix.build_gui
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Install Cross (Linux arm64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build Binary
+      - name: Build CLI Binary
         if: matrix.target != 'aarch64-unknown-linux-gnu'
-        run: cargo build --release --target ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }} -p devflow_cli
 
-      - name: Build Binary with Cross (Linux arm64)
+      - name: Build CLI Binary with Cross (Linux arm64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: cross build --release --target ${{ matrix.target }}
+        run: cross build --release --target ${{ matrix.target }} -p devflow_cli
 
-      - name: Package Binary
+      - name: Package CLI Binary
+        shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
-          tar -czf ../../../${{ matrix.asset_name }} ${{ matrix.binary_name }}
-          cd ../../..
-          shasum -a 256 ${{ matrix.asset_name }} > ${{ matrix.asset_name }}.sha256
+          mkdir -p dist
+          tar -czf dist/${{ matrix.cli_asset }} -C target/${{ matrix.target }}/release devflow
+          shasum -a 256 dist/${{ matrix.cli_asset }} > dist/${{ matrix.cli_asset }}.sha256
+
+      - name: Build Desktop Companion GUI
+        if: matrix.build_gui
+        shell: bash
+        run: |
+          cd clients/tauri_app
+          npm ci || npm install
+          npm run build
+          cd ../..
+          cargo build --release --target ${{ matrix.target }} --manifest-path clients/tauri_app/src-tauri/Cargo.toml
+          mkdir -p dist
+          cp clients/tauri_app/src-tauri/target/${{ matrix.target }}/release/devflow-desktop ./devflow-gui
+          tar -czf dist/${{ matrix.gui_asset }} devflow-gui
+          rm ./devflow-gui
+          shasum -a 256 dist/${{ matrix.gui_asset }} > dist/${{ matrix.gui_asset }}.sha256
+
+      - name: Resolve Release Tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Upload Release Artifacts
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ${{ matrix.asset_name }}
-            ${{ matrix.asset_name }}.sha256
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: DevFlow ${{ steps.release_tag.outputs.tag }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-release-docs:
+    name: Update Readme for Latest Release
+    needs: build-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve Release Tag
+        id: release_tag
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Readme Release Updater Script
+        shell: bash
+        run: |
+          chmod +x ./scripts/update-readme-release.sh
+          ./scripts/update-readme-release.sh "${{ steps.release_tag.outputs.tag }}"
+
+      - name: Commit and Push Updated Readme
+        shell: bash
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md docs/getting-started.md
+          if ! git diff --staged --quiet; then
+            git commit -m "docs: update README for release ${{ steps.release_tag.outputs.tag }} [skip ci]"
+            git push origin main
+          else
+            echo "Documentation is already up-to-date."
+          fi
+

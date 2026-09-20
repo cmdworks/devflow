@@ -17,4 +17,3 @@ pub use explainer::{ErrorExplanation, ToolchainExplainer};
 pub use ipc::{IpcClient, IpcRequest, IpcResponse, IpcServer};
 pub use project::{DetectedFramework, Project, ProjectTarget};
 pub use registry::{ActiveSessionInfo, GlobalRegistry, KnownProject};
-

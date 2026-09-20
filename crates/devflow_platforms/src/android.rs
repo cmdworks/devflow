@@ -23,11 +23,17 @@ impl AndroidPlatformRunner {
     }
 
     pub fn resolve_adb() -> String {
-        if std::process::Command::new("adb").arg("version").output().is_ok() {
+        if std::process::Command::new("adb")
+            .arg("version")
+            .output()
+            .is_ok()
+        {
             return "adb".to_string();
         }
         if let Ok(home) = std::env::var("ANDROID_HOME") {
-            let p = std::path::Path::new(&home).join("platform-tools").join("adb");
+            let p = std::path::Path::new(&home)
+                .join("platform-tools")
+                .join("adb");
             if p.exists() {
                 return p.to_string_lossy().to_string();
             }
@@ -50,33 +56,56 @@ impl Default for AndroidPlatformRunner {
 
 #[async_trait]
 impl PlatformRunner for AndroidPlatformRunner {
-    async fn install(&self, _project_dir: &Path, device: &Device, artifact_path: Option<&str>) -> Result<()> {
-        let artifact = artifact_path.ok_or_else(|| DevflowError::Install("No artifact path specified for Android install".to_string()))?;
+    async fn install(
+        &self,
+        _project_dir: &Path,
+        device: &Device,
+        artifact_path: Option<&str>,
+    ) -> Result<()> {
+        let artifact = artifact_path.ok_or_else(|| {
+            DevflowError::Install("No artifact path specified for Android install".to_string())
+        })?;
         info!("Installing APK {} on device {}", artifact, device.id);
 
         let adb = Self::resolve_adb();
         let mut cmd = Command::new(&adb);
         cmd.args(["-s", &device.id, "install", "-r", artifact]);
 
-        let output = cmd.output().await
+        let output = cmd
+            .output()
+            .await
             .map_err(|e| DevflowError::Install(format!("Failed to run adb install: {}", e)))?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(DevflowError::Install(format!("adb install failed: {}\n{}", stdout, stderr)));
+            return Err(DevflowError::Install(format!(
+                "adb install failed: {}\n{}",
+                stdout, stderr
+            )));
         }
 
         Ok(())
     }
 
-    async fn launch(&self, project_dir: &Path, device: &Device, launch_cmd: Option<&str>) -> Result<()> {
+    async fn launch(
+        &self,
+        project_dir: &Path,
+        device: &Device,
+        launch_cmd: Option<&str>,
+    ) -> Result<()> {
         self.stop(project_dir, device).await?;
 
-        let launch_target = launch_cmd.ok_or_else(|| DevflowError::Launch("No launch command or activity specified".to_string()))?;
+        let launch_target = launch_cmd.ok_or_else(|| {
+            DevflowError::Launch("No launch command or activity specified".to_string())
+        })?;
         info!("Launching Android activity/intent: {}", launch_target);
 
-        let pkg = launch_target.split('/').next().unwrap_or(launch_target).to_string();
+        let pkg = launch_target
+            .split('/')
+            .next()
+            .unwrap_or(launch_target)
+            .to_string();
         let mut p_lock = self.active_package.lock().await;
         *p_lock = Some(pkg);
 
@@ -89,7 +118,15 @@ impl PlatformRunner for AndroidPlatformRunner {
         } else {
             let adb = Self::resolve_adb();
             let mut cmd = Command::new(&adb);
-            cmd.args(["-s", &device.id, "shell", "am", "start", "-n", launch_target]);
+            cmd.args([
+                "-s",
+                &device.id,
+                "shell",
+                "am",
+                "start",
+                "-n",
+                launch_target,
+            ]);
             cmd.output().await
         };
 
@@ -98,9 +135,15 @@ impl PlatformRunner for AndroidPlatformRunner {
             Ok(out) => {
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 let stdout = String::from_utf8_lossy(&out.stdout);
-                Err(DevflowError::Launch(format!("adb launch failed: {}\n{}", stdout, stderr)))
+                Err(DevflowError::Launch(format!(
+                    "adb launch failed: {}\n{}",
+                    stdout, stderr
+                )))
             }
-            Err(e) => Err(DevflowError::Launch(format!("Failed to execute adb launch: {}", e))),
+            Err(e) => Err(DevflowError::Launch(format!(
+                "Failed to execute adb launch: {}",
+                e
+            ))),
         }
     }
 
@@ -116,7 +159,12 @@ impl PlatformRunner for AndroidPlatformRunner {
         Ok(())
     }
 
-    async fn stream_logs(&self, _project_dir: &Path, device: &Device, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
+    async fn stream_logs(
+        &self,
+        _project_dir: &Path,
+        device: &Device,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         let device_id = device.id.clone();
         let adb = Self::resolve_adb();
 

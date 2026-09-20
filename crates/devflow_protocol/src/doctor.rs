@@ -34,7 +34,11 @@ pub struct DoctorCheck {
 }
 
 impl DoctorCheck {
-    pub fn pass(name: impl Into<String>, message: impl Into<String>, version: Option<String>) -> Self {
+    pub fn pass(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        version: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Passed,
@@ -45,7 +49,12 @@ impl DoctorCheck {
         }
     }
 
-    pub fn pass_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, version: Option<String>) -> Self {
+    pub fn pass_with_category(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        category: impl Into<String>,
+        version: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Passed,
@@ -56,7 +65,11 @@ impl DoctorCheck {
         }
     }
 
-    pub fn warn(name: impl Into<String>, message: impl Into<String>, fix_hint: Option<String>) -> Self {
+    pub fn warn(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        fix_hint: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Warning,
@@ -67,7 +80,12 @@ impl DoctorCheck {
         }
     }
 
-    pub fn warn_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, fix_hint: Option<String>) -> Self {
+    pub fn warn_with_category(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        category: impl Into<String>,
+        fix_hint: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Warning,
@@ -78,7 +96,11 @@ impl DoctorCheck {
         }
     }
 
-    pub fn fail(name: impl Into<String>, message: impl Into<String>, fix_hint: Option<String>) -> Self {
+    pub fn fail(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        fix_hint: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Failed,
@@ -89,7 +111,12 @@ impl DoctorCheck {
         }
     }
 
-    pub fn fail_with_category(name: impl Into<String>, message: impl Into<String>, category: impl Into<String>, fix_hint: Option<String>) -> Self {
+    pub fn fail_with_category(
+        name: impl Into<String>,
+        message: impl Into<String>,
+        category: impl Into<String>,
+        fix_hint: Option<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             status: CheckStatus::Failed,

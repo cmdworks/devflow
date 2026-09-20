@@ -31,25 +31,40 @@ impl Default for DesktopPlatformRunner {
 
 #[async_trait]
 impl PlatformRunner for DesktopPlatformRunner {
-    async fn install(&self, _project_dir: &Path, _device: &Device, _artifact_path: Option<&str>) -> Result<()> {
+    async fn install(
+        &self,
+        _project_dir: &Path,
+        _device: &Device,
+        _artifact_path: Option<&str>,
+    ) -> Result<()> {
         Ok(())
     }
 
-    async fn launch(&self, project_dir: &Path, _device: &Device, launch_cmd: Option<&str>) -> Result<()> {
+    async fn launch(
+        &self,
+        project_dir: &Path,
+        _device: &Device,
+        launch_cmd: Option<&str>,
+    ) -> Result<()> {
         self.stop(project_dir, _device).await?;
 
-        let cmd_str = launch_cmd.ok_or_else(|| DevflowError::Launch("No launch command specified for desktop target".to_string()))?;
+        let cmd_str = launch_cmd.ok_or_else(|| {
+            DevflowError::Launch("No launch command specified for desktop target".to_string())
+        })?;
         info!("Launching desktop process: {}", cmd_str);
 
         let mut parts = cmd_str.split_whitespace();
-        let program = parts.next().ok_or_else(|| DevflowError::Launch("Empty launch command".to_string()))?;
+        let program = parts
+            .next()
+            .ok_or_else(|| DevflowError::Launch("Empty launch command".to_string()))?;
         let args: Vec<&str> = parts.collect();
 
-        let resolved_program = if std::path::Path::new(program).is_relative() && project_dir.join(program).exists() {
-            project_dir.join(program)
-        } else {
-            std::path::PathBuf::from(program)
-        };
+        let resolved_program =
+            if std::path::Path::new(program).is_relative() && project_dir.join(program).exists() {
+                project_dir.join(program)
+            } else {
+                std::path::PathBuf::from(program)
+            };
 
         let child = Command::new(&resolved_program)
             .args(&args)
@@ -57,7 +72,14 @@ impl PlatformRunner for DesktopPlatformRunner {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| DevflowError::Launch(format!("Failed to spawn process '{}' ({}): {}", cmd_str, resolved_program.display(), e)))?;
+            .map_err(|e| {
+                DevflowError::Launch(format!(
+                    "Failed to spawn process '{}' ({}): {}",
+                    cmd_str,
+                    resolved_program.display(),
+                    e
+                ))
+            })?;
 
         let mut lock = self.active_child.lock().await;
         *lock = Some(child);
@@ -98,7 +120,12 @@ impl PlatformRunner for DesktopPlatformRunner {
         Ok(())
     }
 
-    async fn stream_logs(&self, _project_dir: &Path, _device: &Device, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
+    async fn stream_logs(
+        &self,
+        _project_dir: &Path,
+        _device: &Device,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
         let mut lock = self.active_child.lock().await;
         let child = match lock.as_mut() {
             Some(c) => c,

@@ -33,21 +33,24 @@ impl TuiRunner {
 
         let (event_tx, mut event_rx) = tokio::sync::mpsc::channel::<(usize, DevflowEvent)>(2000);
 
-        let spawn_event_forwarder = |target_idx: usize, mut rx: tokio::sync::broadcast::Receiver<DevflowEvent>, tx: tokio::sync::mpsc::Sender<(usize, DevflowEvent)>| {
-            tokio::spawn(async move {
-                loop {
-                    match rx.recv().await {
-                        Ok(evt) => {
-                            if tx.send((target_idx, evt)).await.is_err() {
-                                break;
+        let spawn_event_forwarder =
+            |target_idx: usize,
+             mut rx: tokio::sync::broadcast::Receiver<DevflowEvent>,
+             tx: tokio::sync::mpsc::Sender<(usize, DevflowEvent)>| {
+                tokio::spawn(async move {
+                    loop {
+                        match rx.recv().await {
+                            Ok(evt) => {
+                                if tx.send((target_idx, evt)).await.is_err() {
+                                    break;
+                                }
                             }
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                         }
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                     }
-                }
-            });
-        };
+                });
+            };
 
         loop {
             terminal.draw(|f| ui::render(f, &app))?;

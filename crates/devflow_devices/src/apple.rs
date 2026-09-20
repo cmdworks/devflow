@@ -19,7 +19,7 @@ impl AppleDiscoverer {
                 if let Ok(json) = serde_json::from_slice::<Value>(&output.stdout) {
                     if let Some(dev_map) = json.get("devices").and_then(|d| d.as_object()) {
                         for (runtime, dev_list) in dev_map {
-                            let os_name = runtime.split('.').last().unwrap_or(runtime);
+                            let os_name = runtime.split('.').next_back().unwrap_or(runtime);
                             if let Some(list) = dev_list.as_array() {
                                 for dev in list {
                                     let is_available = dev
@@ -30,9 +30,14 @@ impl AppleDiscoverer {
                                         continue;
                                     }
 
-                                    let udid = dev.get("udid").and_then(|u| u.as_str()).unwrap_or("");
-                                    let name = dev.get("name").and_then(|n| n.as_str()).unwrap_or("Simulator");
-                                    let state_str = dev.get("state").and_then(|s| s.as_str()).unwrap_or("");
+                                    let udid =
+                                        dev.get("udid").and_then(|u| u.as_str()).unwrap_or("");
+                                    let name = dev
+                                        .get("name")
+                                        .and_then(|n| n.as_str())
+                                        .unwrap_or("Simulator");
+                                    let state_str =
+                                        dev.get("state").and_then(|s| s.as_str()).unwrap_or("");
 
                                     let state = match state_str {
                                         "Booted" => DeviceState::Booted,
@@ -40,7 +45,12 @@ impl AppleDiscoverer {
                                         _ => DeviceState::Unavailable,
                                     };
 
-                                    let mut d = Device::new(udid, format!("{} ({})", name, os_name), Platform::Ios, state);
+                                    let mut d = Device::new(
+                                        udid,
+                                        format!("{} ({})", name, os_name),
+                                        Platform::Ios,
+                                        state,
+                                    );
                                     d.is_emulator = true;
                                     d.os_version = Some(os_name.to_string());
                                     devices.push(d);
@@ -54,7 +64,13 @@ impl AppleDiscoverer {
 
         // 2. Physical iOS devices via devicectl (iOS 17+)
         if let Ok(output) = Command::new("xcrun")
-            .args(["devicectl", "list", "devices", "--json-output", "/dev/stdout"])
+            .args([
+                "devicectl",
+                "list",
+                "devices",
+                "--json-output",
+                "/dev/stdout",
+            ])
             .output()
             .await
         {
@@ -62,14 +78,17 @@ impl AppleDiscoverer {
                 if let Ok(json) = serde_json::from_slice::<Value>(&output.stdout) {
                     if let Some(list) = json.pointer("/result/devices").and_then(|d| d.as_array()) {
                         for dev in list {
-                            let identifier = dev.pointer("/hardwareProperties/udid")
+                            let identifier = dev
+                                .pointer("/hardwareProperties/udid")
                                 .or_else(|| dev.get("identifier"))
                                 .and_then(|u| u.as_str())
                                 .unwrap_or("");
-                            let name = dev.pointer("/deviceProperties/name")
+                            let name = dev
+                                .pointer("/deviceProperties/name")
                                 .and_then(|n| n.as_str())
                                 .unwrap_or("Apple Device");
-                            let state_str = dev.pointer("/connectionProperties/transportType")
+                            let state_str = dev
+                                .pointer("/connectionProperties/transportType")
                                 .and_then(|s| s.as_str())
                                 .unwrap_or("connected");
 

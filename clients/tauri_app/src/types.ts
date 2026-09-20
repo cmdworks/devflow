@@ -39,7 +39,7 @@ export interface WorkspaceResponse {
   active_sessions: ActiveSessionInfo[];
 }
 
-export type ViewSection = "overview" | "targets" | "terminal" | "devices" | "doctor" | "settings";
+export type ViewSection = "overview" | "targets" | "terminal" | "devices" | "doctor" | "mcp" | "settings";
 
 export interface KnownWorkspace {
   name: string;
@@ -94,6 +94,38 @@ export interface PaneInfo {
   target?: ProjectTarget;
 }
 
+export interface McpToolProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
+}
+
+export interface McpToolDefinition {
+  name: string;
+  description: string;
+  inputSchema: {
+    type: string;
+    properties?: Record<string, McpToolProperty>;
+    required?: string[];
+  };
+}
+
+export interface McpClientConfigs {
+  claude_desktop: Record<string, unknown>;
+  cursor: Record<string, unknown>;
+  antigravity: Record<string, unknown>;
+  vscode: Record<string, unknown>;
+}
+
+export interface McpStatusResponse {
+  enabled: boolean;
+  http_endpoint: string;
+  port: number;
+  tools_count: number;
+  tools: McpToolDefinition[];
+  configs: McpClientConfigs;
+}
+
 export type ServerEvent =
   | {
       type: "LogAppended";
@@ -126,4 +158,32 @@ export type ServerEvent =
         session_id: string;
         status: string;
       };
+    }
+  | {
+      type: "McpAccessLog";
+      payload: McpAccessLogEntry;
     };
+
+export interface McpAccessLogEntry {
+  id: string;
+  timestamp: string;
+  client: string;
+  method: string;
+  tool_name?: string;
+  session_id?: string;
+  project_path?: string;
+  arguments?: Record<string, unknown> | unknown;
+  response?: Record<string, unknown> | unknown;
+  duration_ms: number;
+  status: "success" | "error";
+  summary: string;
+  error_message?: string;
+}
+
+export interface McpSessionDescriptor {
+  session_id: string;
+  client: string;
+  total_calls: number;
+  last_tool?: string;
+  last_timestamp: string;
+}

@@ -17,8 +17,12 @@ impl EmulatorManager {
         let env_roots = [
             std::env::var("ANDROID_HOME").ok(),
             std::env::var("ANDROID_SDK_ROOT").ok(),
-            std::env::var("HOME").ok().map(|h| format!("{}/Library/Android/sdk", h)),
-            std::env::var("HOME").ok().map(|h| format!("{}/Android/Sdk", h)),
+            std::env::var("HOME")
+                .ok()
+                .map(|h| format!("{}/Library/Android/sdk", h)),
+            std::env::var("HOME")
+                .ok()
+                .map(|h| format!("{}/Android/Sdk", h)),
         ];
 
         for root in env_roots.into_iter().flatten() {
@@ -37,11 +41,7 @@ impl EmulatorManager {
             None => return Vec::new(),
         };
 
-        let output = match Command::new(&emulator_bin)
-            .arg("-list-avds")
-            .output()
-            .await
-        {
+        let output = match Command::new(&emulator_bin).arg("-list-avds").output().await {
             Ok(out) if out.status.success() => out,
             _ => return Vec::new(),
         };
@@ -73,8 +73,9 @@ impl EmulatorManager {
     }
 
     pub async fn boot_avd(avd_name: &str) -> Result<String, String> {
-        let emulator_bin = Self::find_emulator_binary()
-            .ok_or_else(|| "Android SDK 'emulator' tool not found. Ensure ANDROID_HOME is set.".to_string())?;
+        let emulator_bin = Self::find_emulator_binary().ok_or_else(|| {
+            "Android SDK 'emulator' tool not found. Ensure ANDROID_HOME is set.".to_string()
+        })?;
 
         info!("Booting Android AVD '{}'...", avd_name);
 
@@ -107,7 +108,10 @@ impl EmulatorManager {
             }
         }
 
-        Ok(format!("AVD '{}' launched in background (booting in progress)", avd_name))
+        Ok(format!(
+            "AVD '{}' launched in background (booting in progress)",
+            avd_name
+        ))
     }
 }
 
@@ -120,5 +124,8 @@ fn which_binary(name: &str) -> Result<PathBuf, std::io::Error> {
             }
         }
     }
-    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "not found"))
+    Err(std::io::Error::new(
+        std::io::ErrorKind::NotFound,
+        "not found",
+    ))
 }

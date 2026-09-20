@@ -60,7 +60,9 @@ impl CrashAggregator {
                         || (next.level == LogLevel::E && next_msg.starts_with("java."));
 
                     if is_stack_continuation {
-                        if next_msg.contains("Exception:") && (exc_type == "UnknownException" || exc_type == "main") {
+                        if next_msg.contains("Exception:")
+                            && (exc_type == "UnknownException" || exc_type == "main")
+                        {
                             exc_type = Self::extract_exception_type(next_msg);
                         }
                         if top_frame.is_none() && next_msg.starts_with("at ") {
@@ -100,7 +102,7 @@ impl CrashAggregator {
         }
 
         let mut result: Vec<CrashCluster> = clusters.into_values().collect();
-        result.sort_by(|a, b| b.occurrences.cmp(&a.occurrences));
+        result.sort_by_key(|a| std::cmp::Reverse(a.occurrences));
         result
     }
 
@@ -133,14 +135,22 @@ mod tests {
     #[test]
     fn test_group_android_crashes() {
         let entries = vec![
-            LogEntry::new(LogLevel::E, "FATAL EXCEPTION: main")
-                .with_tag("AndroidRuntime"),
-            LogEntry::new(LogLevel::E, "java.lang.NullPointerException: Attempt to invoke virtual method on null object")
-                .with_tag("AndroidRuntime"),
-            LogEntry::new(LogLevel::E, "    at com.example.MainActivity.onCreate(MainActivity.kt:42)")
-                .with_tag("AndroidRuntime"),
-            LogEntry::new(LogLevel::E, "    at android.app.Activity.performCreate(Activity.java:8051)")
-                .with_tag("AndroidRuntime"),
+            LogEntry::new(LogLevel::E, "FATAL EXCEPTION: main").with_tag("AndroidRuntime"),
+            LogEntry::new(
+                LogLevel::E,
+                "java.lang.NullPointerException: Attempt to invoke virtual method on null object",
+            )
+            .with_tag("AndroidRuntime"),
+            LogEntry::new(
+                LogLevel::E,
+                "    at com.example.MainActivity.onCreate(MainActivity.kt:42)",
+            )
+            .with_tag("AndroidRuntime"),
+            LogEntry::new(
+                LogLevel::E,
+                "    at android.app.Activity.performCreate(Activity.java:8051)",
+            )
+            .with_tag("AndroidRuntime"),
         ];
 
         let clusters = CrashAggregator::group_crashes(&entries);

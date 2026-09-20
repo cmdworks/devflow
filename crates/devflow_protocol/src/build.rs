@@ -18,7 +18,12 @@ pub struct BuildResult {
 }
 
 impl BuildResult {
-    pub fn ok(duration_ms: u64, artifact_path: Option<String>, stdout: String, stderr: String) -> Self {
+    pub fn ok(
+        duration_ms: u64,
+        artifact_path: Option<String>,
+        stdout: String,
+        stderr: String,
+    ) -> Self {
         Self {
             success: true,
             duration_ms,

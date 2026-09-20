@@ -41,7 +41,10 @@ pub struct Project {
 
 impl Project {
     pub fn detect(dir: impl AsRef<Path>) -> Result<Self> {
-        let root = dir.as_ref().canonicalize().unwrap_or_else(|_| dir.as_ref().to_path_buf());
+        let root = dir
+            .as_ref()
+            .canonicalize()
+            .unwrap_or_else(|_| dir.as_ref().to_path_buf());
 
         // Check if devflow.toml exists
         let config = DevflowConfig::find_and_load(&root)?;
@@ -91,7 +94,11 @@ impl Project {
             || dir.join("settings.gradle").exists()
             || dir.join("settings.gradle.kts").exists()
         {
-            return Ok((DetectedFramework::KotlinAndroid, Platform::Android, dir_name));
+            return Ok((
+                DetectedFramework::KotlinAndroid,
+                Platform::Android,
+                dir_name,
+            ));
         }
 
         // 2. SwiftPM
@@ -154,7 +161,9 @@ impl Project {
 
         // 1. Check root directory
         if let Ok(root_proj) = Self::detect(root) {
-            if root_proj.detected_framework != DetectedFramework::Generic || root.join("devflow.toml").exists() {
+            if root_proj.detected_framework != DetectedFramework::Generic
+                || root.join("devflow.toml").exists()
+            {
                 targets.push(ProjectTarget {
                     id: format!("{}-root", root_proj.name.to_lowercase().replace(' ', "-")),
                     name: root_proj.name.clone(),
@@ -172,14 +181,25 @@ impl Project {
                 let p = entry.path();
                 if p.is_dir() {
                     let dir_name = p.file_name().and_then(|s| s.to_str()).unwrap_or("");
-                    if dir_name.starts_with('.') || dir_name == "target" || dir_name == "build" || dir_name == ".build" || dir_name == "node_modules" {
+                    if dir_name.starts_with('.')
+                        || dir_name == "target"
+                        || dir_name == "build"
+                        || dir_name == ".build"
+                        || dir_name == "node_modules"
+                    {
                         continue;
                     }
 
                     if let Ok(sub_proj) = Self::detect(&p) {
-                        if sub_proj.detected_framework != DetectedFramework::Generic || p.join("devflow.toml").exists() {
+                        if sub_proj.detected_framework != DetectedFramework::Generic
+                            || p.join("devflow.toml").exists()
+                        {
                             targets.push(ProjectTarget {
-                                id: format!("{}-{}", sub_proj.name.to_lowercase().replace(' ', "-"), dir_name),
+                                id: format!(
+                                    "{}-{}",
+                                    sub_proj.name.to_lowercase().replace(' ', "-"),
+                                    dir_name
+                                ),
                                 name: format!("{} ({})", sub_proj.name, dir_name),
                                 path: p,
                                 platform: sub_proj.detected_platform,

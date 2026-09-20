@@ -6,11 +6,11 @@ import {
   Settings,
   Pencil,
   Info,
-  Check,
   FolderGit2,
   ChevronLeft,
   ChevronRight,
   Trash2,
+  Bot,
 } from "lucide-react";
 import type { KnownWorkspace, ViewSection, Device } from "../types";
 import { WorkspaceInfoPopover } from "./WorkspaceInfoPopover";
@@ -27,7 +27,6 @@ interface PrimarySidebarProps {
   onSelectSection: (section: ViewSection) => void;
   onRenameWorkspace: (path: string, newName: string) => void;
   onRemoveWorkspace: (path: string) => void;
-  onOpenSettings: () => void;
 }
 
 export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
@@ -42,7 +41,6 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
   onSelectSection,
   onRenameWorkspace,
   onRemoveWorkspace,
-  onOpenSettings,
 }) => {
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
   const [editNameValue, setEditNameValue] = useState("");
@@ -138,8 +136,16 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
           </button>
 
           <button
-            className="rail-footer-btn"
-            onClick={onOpenSettings}
+            className={`rail-footer-btn ${activeSection === "mcp" ? "active" : ""}`}
+            onClick={() => onSelectSection("mcp")}
+            title="DevFlow Model Context Protocol (MCP) Hub & Tools"
+          >
+            <Bot size={14} color="#c084fc" />
+          </button>
+
+          <button
+            className={`rail-footer-btn ${activeSection === "settings" ? "active" : ""}`}
+            onClick={() => onSelectSection("settings")}
             title="DevFlow Settings"
           >
             <Settings size={14} color="#94a3b8" />
@@ -188,101 +194,77 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
         </div>
       </div>
 
-      {/* 2. Workspace List */}
+      {/* 2. Workspaces List */}
       <div className="primary-workspace-list">
         {knownWorkspaces.length === 0 ? (
-          <div className="empty-workspaces-hint">
-            <span>No workspaces yet</span>
-            <button className="btn-hint-add" onClick={onAddWorkspace}>
-              + Add Workspace
+          <div className="primary-ws-empty">
+            <span>No workspaces open</span>
+            <button className="btn-ws-empty-add" onClick={onAddWorkspace}>
+              <FolderPlus size={12} />
+              <span>Open Folder</span>
             </button>
           </div>
         ) : (
           knownWorkspaces.map((ws) => {
             const isActive = ws.path === activeWorkspacePath;
             const displayName = ws.custom_name || ws.name;
-            const isEditing = renamingPath === ws.path;
             const initials = displayName.slice(0, 2).toUpperCase();
             const platformClass = (ws.platform || "generic").toLowerCase();
+            const isRenaming = renamingPath === ws.path;
 
             return (
               <div
                 key={ws.path}
                 className={`primary-ws-item ${isActive ? "active" : ""}`}
-                onClick={() => {
-                  onSelectWorkspace(ws.path);
-                  if (activeSection === "devices" || activeSection === "doctor") {
-                    onSelectSection("terminal");
-                  }
-                }}
-                title={ws.path}
+                onClick={() => onSelectWorkspace(ws.path)}
+                onContextMenu={(e) => handleInfoClick(ws, e)}
+                title={`${displayName}\n${ws.path}`}
               >
-                {/* Avatar Badge */}
                 <div className={`ws-avatar-badge ${platformClass}`}>
                   {initials}
                 </div>
 
-                {/* Name / Editable input */}
-                <div className="ws-item-info">
-                  {isEditing ? (
-                    <div className="ws-edit-row" onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        className="ws-rename-input"
-                        value={editNameValue}
-                        autoFocus
-                        onChange={(e) => setEditNameValue(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveRename(ws.path);
-                          if (e.key === "Escape") setRenamingPath(null);
-                        }}
-                        onBlur={() => saveRename(ws.path)}
-                      />
-                      <button
-                        className="btn-save-rename"
-                        onClick={() => saveRename(ws.path)}
-                      >
-                        <Check size={12} color="#10b981" />
-                      </button>
-                    </div>
+                <div className="primary-ws-text">
+                  {isRenaming ? (
+                    <input
+                      type="text"
+                      className="ws-inline-rename-input"
+                      value={editNameValue}
+                      onChange={(e) => setEditNameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveRename(ws.path);
+                        if (e.key === "Escape") setRenamingPath(null);
+                      }}
+                      onBlur={() => saveRename(ws.path)}
+                      autoFocus
+                      onClick={(e) => e.stopPropagation()}
+                    />
                   ) : (
-                    <div
-                      className="ws-item-name"
-                      onDoubleClick={(e) => startRename(ws, e)}
-                    >
-                      {displayName}
-                    </div>
+                    <span className="ws-name-primary truncate">{displayName}</span>
                   )}
-                  <div className="ws-item-meta">
-                    <span className="ws-platform-label">{ws.platform || "Generic"}</span>
-                    {isActive && <span className="ws-active-pulse" />}
-                  </div>
+                  <span className="ws-platform-primary font-mono">{ws.platform}</span>
                 </div>
 
-                {/* Actions: Edit & Info */}
-                {!isEditing && (
-                  <div className="ws-item-actions">
+                {!isRenaming && (
+                  <div className="primary-ws-actions" onClick={(e) => e.stopPropagation()}>
                     <button
-                      className="btn-ws-subaction"
-                      onClick={(e) => startRename(ws, e)}
-                      title="Rename Workspace"
-                    >
-                      <Pencil size={11} />
-                    </button>
-                    <button
-                      className="btn-ws-subaction"
+                      className="btn-ws-action-icon"
                       onClick={(e) => handleInfoClick(ws, e)}
-                      title="Workspace Details & Path"
+                      title="Workspace details"
                     >
-                      <Info size={12} />
+                      <Info size={11} color="#94a3b8" />
                     </button>
                     <button
-                      className="btn-ws-subaction remove-btn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemoveWorkspace(ws.path);
-                      }}
-                      title="Remove Workspace from List"
+                      className="btn-ws-action-icon"
+                      onClick={(e) => startRename(ws, e)}
+                      title="Rename in DevFlow"
+                    >
+                      <Pencil size={11} color="#94a3b8" />
+                    </button>
+                    <button
+                      className="btn-ws-action-icon danger"
+                      onClick={() => onRemoveWorkspace(ws.path)}
+                      title="Remove from DevFlow list"
                     >
                       <Trash2 size={11} color="#f87171" />
                     </button>
@@ -294,7 +276,7 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
         )}
       </div>
 
-      {/* 3. Bottom Items: Devices, Doctor & Settings */}
+      {/* 3. Bottom Items: Devices, Doctor, MCP & Settings */}
       <div className="primary-sidebar-footer">
         <button
           className={`primary-footer-btn ${activeSection === "devices" ? "active" : ""}`}
@@ -321,8 +303,28 @@ export const PrimarySidebar: React.FC<PrimarySidebarProps> = ({
         </button>
 
         <button
-          className="primary-footer-btn"
-          onClick={onOpenSettings}
+          className={`primary-footer-btn ${activeSection === "mcp" ? "active" : ""}`}
+          onClick={() => onSelectSection("mcp")}
+          title="DevFlow Model Context Protocol (MCP) Hub & Tools"
+        >
+          <div className="footer-btn-left">
+            <Bot size={14} color="#c084fc" />
+            <span>MCP Hub</span>
+          </div>
+          <span
+            style={{
+              width: "6px",
+              height: "6px",
+              borderRadius: "50%",
+              background: "#c084fc",
+              boxShadow: "0 0 6px #c084fc",
+            }}
+          />
+        </button>
+
+        <button
+          className={`primary-footer-btn ${activeSection === "settings" ? "active" : ""}`}
+          onClick={() => onSelectSection("settings")}
           title="Settings & Environment"
         >
           <div className="footer-btn-left">

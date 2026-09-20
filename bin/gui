@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# DevFlow GUI — production Tauri binary wrapper
+# Runs the release Tauri desktop app binary.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+RELEASE_BIN="$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/target/release/devflow-desktop"
+
+if [ ! -x "$RELEASE_BIN" ]; then
+    >&2 echo "⚡ Tauri release binary not found. Building production GUI..."
+    (cd "$REPO_ROOT/clients/tauri_app" && npm run build) >&2
+    cargo build --release --manifest-path "$REPO_ROOT/clients/tauri_app/src-tauri/Cargo.toml" >&2
+fi
+
+exec "$RELEASE_BIN" "$@"

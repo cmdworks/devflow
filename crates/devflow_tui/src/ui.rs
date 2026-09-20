@@ -35,13 +35,24 @@ fn render_hub(f: &mut Frame, app: &TuiApp) {
 }
 
 fn render_hub_header(f: &mut Frame, app: &TuiApp, area: Rect) {
-    let dir_name = app.project_dir.file_name().and_then(|s| s.to_str()).unwrap_or("Workspace");
+    let dir_name = app
+        .project_dir
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Workspace");
     let active_count = app.active_sessions.len();
 
     let session_badge = if active_count > 0 {
         Span::styled(
-            format!(" {} Active Session{} ", active_count, if active_count > 1 { "s" } else { "" }),
-            Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD),
+            format!(
+                " {} Active Session{} ",
+                active_count,
+                if active_count > 1 { "s" } else { "" }
+            ),
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
         )
     } else {
         Span::styled(" 0 Active Sessions ", Style::default().fg(Color::DarkGray))
@@ -50,13 +61,27 @@ fn render_hub_header(f: &mut Frame, app: &TuiApp, area: Rect) {
     let status_msg = app.status_message.as_deref().unwrap_or("Ready");
 
     let header_text = vec![Line::from(vec![
-        Span::styled(" ⚡ DevFlow Hub ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " ⚡ DevFlow Hub ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  "),
-        Span::styled(format!("Folder: {}", dir_name), Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            format!("Folder: {}", dir_name),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw("  |  "),
         session_badge,
         Span::raw("  |  "),
-        Span::styled(format!("Status: {}", status_msg), Style::default().fg(Color::Yellow)),
+        Span::styled(
+            format!("Status: {}", status_msg),
+            Style::default().fg(Color::Yellow),
+        ),
     ])];
 
     let block = Block::default()
@@ -101,10 +126,17 @@ fn render_hub_main(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.hub_focus == HubFocus::Targets;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let items: Vec<ListItem> = if app.targets.is_empty() {
-        vec![ListItem::new(Span::styled(" No recognized framework targets in workspace", Style::default().fg(Color::DarkGray)))]
+        vec![ListItem::new(Span::styled(
+            " No recognized framework targets in workspace",
+            Style::default().fg(Color::DarkGray),
+        ))]
     } else {
         app.targets
             .iter()
@@ -112,10 +144,16 @@ fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
             .map(|(i, target)| {
                 let is_selected = i == app.selected_target_idx;
                 let marker = if is_selected { "▶ " } else { "  " };
-                let marker_color = if is_selected { Color::Cyan } else { Color::DarkGray };
+                let marker_color = if is_selected {
+                    Color::Cyan
+                } else {
+                    Color::DarkGray
+                };
 
                 let target_style = if is_selected {
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::Gray)
                 };
@@ -124,8 +162,14 @@ fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
                     Span::styled(marker, Style::default().fg(marker_color)),
                     Span::styled(format!("{}. ", i + 1), Style::default().fg(Color::DarkGray)),
                     Span::styled(&target.name, target_style),
-                    Span::styled(format!(" [{}]", target.platform), Style::default().fg(Color::Blue)),
-                    Span::styled(format!(" ({})", target.framework), Style::default().fg(Color::Magenta)),
+                    Span::styled(
+                        format!(" [{}]", target.platform),
+                        Style::default().fg(Color::Blue),
+                    ),
+                    Span::styled(
+                        format!(" ({})", target.framework),
+                        Style::default().fg(Color::Magenta),
+                    ),
                 ]);
                 ListItem::new(line)
             })
@@ -144,10 +188,17 @@ fn render_hub_targets(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_hub_sessions(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.hub_focus == HubFocus::Sessions;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let items: Vec<ListItem> = if app.active_sessions.is_empty() {
-        vec![ListItem::new(Span::styled(" No other sessions running on system.", Style::default().fg(Color::DarkGray)))]
+        vec![ListItem::new(Span::styled(
+            " No other sessions running on system.",
+            Style::default().fg(Color::DarkGray),
+        ))]
     } else {
         app.active_sessions
             .iter()
@@ -155,13 +206,28 @@ fn render_hub_sessions(f: &mut Frame, app: &TuiApp, area: Rect) {
             .map(|(i, s)| {
                 let is_selected = i == app.selected_session_idx;
                 let marker = if is_selected { "● " } else { "○ " };
-                let marker_color = if is_selected { Color::Green } else { Color::DarkGray };
+                let marker_color = if is_selected {
+                    Color::Green
+                } else {
+                    Color::DarkGray
+                };
 
                 let line = Line::from(vec![
                     Span::styled(marker, Style::default().fg(marker_color)),
-                    Span::styled(&s.project_name, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
-                    Span::styled(format!(" (PID {})", s.pid), Style::default().fg(Color::DarkGray)),
-                    Span::styled(format!(" [{}]", s.platform), Style::default().fg(Color::Blue)),
+                    Span::styled(
+                        &s.project_name,
+                        Style::default()
+                            .fg(Color::White)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(
+                        format!(" (PID {})", s.pid),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(
+                        format!(" [{}]", s.platform),
+                        Style::default().fg(Color::Blue),
+                    ),
                 ]);
                 ListItem::new(line)
             })
@@ -184,38 +250,81 @@ fn render_hub_actions(f: &mut Frame, app: &TuiApp, area: Rect) {
     if let Some(target) = app.targets.get(app.selected_target_idx) {
         lines.push(Line::from(vec![
             Span::styled("Selected Target: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&target.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &target.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Platform: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", target.platform), Style::default().fg(Color::Blue)),
+            Span::styled(
+                format!("{}", target.platform),
+                Style::default().fg(Color::Blue),
+            ),
             Span::styled(" | Framework: ", Style::default().fg(Color::DarkGray)),
             Span::styled(&target.framework, Style::default().fg(Color::Magenta)),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Path: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(target.path.display().to_string(), Style::default().fg(Color::Gray)),
+            Span::styled(
+                target.path.display().to_string(),
+                Style::default().fg(Color::Gray),
+            ),
         ]));
     } else {
-        lines.push(Line::from(Span::styled("No target selected", Style::default().fg(Color::DarkGray))));
+        lines.push(Line::from(Span::styled(
+            "No target selected",
+            Style::default().fg(Color::DarkGray),
+        )));
     }
 
     lines.push(Line::from(""));
-    lines.push(Line::from(Span::styled("Quick Actions:", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))));
+    lines.push(Line::from(Span::styled(
+        "Quick Actions:",
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
+    )));
     lines.push(Line::from(vec![
-        Span::styled(" [Enter]/[s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [Enter]/[s] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Launch Selected Target"),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [a]         ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [a]         ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Launch ALL Workspace Targets in Parallel"),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [r]         ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [r]         ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Send Reload Signal (IPC)"),
     ]));
     lines.push(Line::from(vec![
-        Span::styled(" [R]         ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [R]         ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Send Full App Restart Signal (IPC)"),
     ]));
 
@@ -231,7 +340,11 @@ fn render_hub_actions(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_hub_devices(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.hub_focus == HubFocus::Devices;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let items: Vec<ListItem> = app
         .devices
@@ -240,12 +353,32 @@ fn render_hub_devices(f: &mut Frame, app: &TuiApp, area: Rect) {
         .map(|(i, d)| {
             let is_selected = i == app.selected_device_idx;
             let marker = if is_selected { "● " } else { "○ " };
-            let marker_color = if is_selected { Color::Green } else { Color::DarkGray };
+            let marker_color = if is_selected {
+                Color::Green
+            } else {
+                Color::DarkGray
+            };
 
             let text = Line::from(vec![
                 Span::styled(marker, Style::default().fg(marker_color)),
-                Span::styled(&d.name, Style::default().fg(if is_selected { Color::White } else { Color::Gray }).add_modifier(if is_selected { Modifier::BOLD } else { Modifier::empty() })),
-                Span::styled(format!(" [{}]", d.platform), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    &d.name,
+                    Style::default()
+                        .fg(if is_selected {
+                            Color::White
+                        } else {
+                            Color::Gray
+                        })
+                        .add_modifier(if is_selected {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        }),
+                ),
+                Span::styled(
+                    format!(" [{}]", d.platform),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]);
             ListItem::new(text)
         })
@@ -263,19 +396,61 @@ fn render_hub_devices(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_hub_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
     let footer_spans = vec![
-        Span::styled(" [Enter]/[s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [Enter]/[s] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Run Target  "),
-        Span::styled(" [a] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [a] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Run All  "),
-        Span::styled(" [Tab] ", Style::default().fg(Color::Black).bg(Color::LightBlue).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [Tab] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightBlue)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Switch Section  "),
-        Span::styled(" [↑/↓] ", Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [↑/↓] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Navigate  "),
-        Span::styled(" [r] ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [r] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Reload  "),
-        Span::styled(" [R] ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [R] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Restart  "),
-        Span::styled(" [q] ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [q] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Quit"),
     ];
 
@@ -315,20 +490,46 @@ fn render_session_tab_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
         let is_active = i == app.active_tab_idx;
 
         let status_badge = match &state.status {
-            TargetStatus::Running => Span::styled(" ● Running ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-            TargetStatus::Building => Span::styled(" ⏳ Building... ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-            TargetStatus::Error(_) => Span::styled(" ✗ Error ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
-            TargetStatus::Stopped => Span::styled(" ■ Stopped ", Style::default().fg(Color::DarkGray)),
+            TargetStatus::Running => Span::styled(
+                " ● Running ",
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            TargetStatus::Building => Span::styled(
+                " ⏳ Building... ",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            TargetStatus::Error(_) => Span::styled(
+                " ✗ Error ",
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            ),
+            TargetStatus::Stopped => {
+                Span::styled(" ■ Stopped ", Style::default().fg(Color::DarkGray))
+            }
             TargetStatus::Idle => Span::styled(" ○ Idle ", Style::default().fg(Color::DarkGray)),
         };
 
         let tab_style = if is_active {
-            Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White).bg(Color::DarkGray)
         };
 
-        tab_spans.push(Span::styled(format!(" [{}: {} ({})] ", i + 1, state.target.name, state.target.platform), tab_style));
+        tab_spans.push(Span::styled(
+            format!(
+                " [{}: {} ({})] ",
+                i + 1,
+                state.target.name,
+                state.target.platform
+            ),
+            tab_style,
+        ));
         tab_spans.push(status_badge);
         tab_spans.push(Span::raw("  "));
     }
@@ -337,12 +538,18 @@ fn render_session_tab_bar(f: &mut Frame, app: &TuiApp, area: Rect) {
     let combined_idx = app.target_states.len();
     let is_combined_active = app.active_tab_idx == combined_idx;
     let comb_style = if is_combined_active {
-        Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::Cyan)
+            .add_modifier(Modifier::BOLD)
     } else {
         Style::default().fg(Color::White).bg(Color::DarkGray)
     };
 
-    tab_spans.push(Span::styled(format!(" [{}: All Logs Combined] ", combined_idx + 1), comb_style));
+    tab_spans.push(Span::styled(
+        format!(" [{}: All Logs Combined] ", combined_idx + 1),
+        comb_style,
+    ));
 
     let block = Block::default()
         .title(" Active Targets & Log Tabs ")
@@ -378,10 +585,17 @@ fn render_session_main(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_session_devices_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.session_panel == SessionPanel::Devices;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let active_device_id = if app.active_tab_idx < app.target_states.len() {
-        app.target_states[app.active_tab_idx].assigned_device.as_ref().map(|d| d.id.as_str())
+        app.target_states[app.active_tab_idx]
+            .assigned_device
+            .as_ref()
+            .map(|d| d.id.as_str())
     } else {
         None
     };
@@ -392,12 +606,32 @@ fn render_session_devices_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
         .map(|d| {
             let is_matched = active_device_id == Some(d.id.as_str());
             let marker = if is_matched { "● " } else { "○ " };
-            let marker_color = if is_matched { Color::Green } else { Color::DarkGray };
+            let marker_color = if is_matched {
+                Color::Green
+            } else {
+                Color::DarkGray
+            };
 
             let text = Line::from(vec![
                 Span::styled(marker, Style::default().fg(marker_color)),
-                Span::styled(&d.name, Style::default().fg(if is_matched { Color::White } else { Color::Gray }).add_modifier(if is_matched { Modifier::BOLD } else { Modifier::empty() })),
-                Span::styled(format!(" [{}]", d.platform), Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    &d.name,
+                    Style::default()
+                        .fg(if is_matched {
+                            Color::White
+                        } else {
+                            Color::Gray
+                        })
+                        .add_modifier(if is_matched {
+                            Modifier::BOLD
+                        } else {
+                            Modifier::empty()
+                        }),
+                ),
+                Span::styled(
+                    format!(" [{}]", d.platform),
+                    Style::default().fg(Color::DarkGray),
+                ),
             ]);
             ListItem::new(text)
         })
@@ -414,8 +648,13 @@ fn render_session_devices_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 }
 
 fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
-    let is_focused = app.session_panel == SessionPanel::Changes || app.session_panel == SessionPanel::Build;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
+    let is_focused =
+        app.session_panel == SessionPanel::Changes || app.session_panel == SessionPanel::Build;
+    let border_color = if is_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let mut lines = Vec::new();
 
@@ -423,23 +662,34 @@ fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
         let state = &app.target_states[app.active_tab_idx];
         lines.push(Line::from(vec![
             Span::styled("Target: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&state.target.name, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                &state.target.name,
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Platform: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", state.target.platform), Style::default().fg(Color::Blue)),
+            Span::styled(
+                format!("{}", state.target.platform),
+                Style::default().fg(Color::Blue),
+            ),
             Span::styled(" (", Style::default().fg(Color::DarkGray)),
             Span::styled(&state.target.framework, Style::default().fg(Color::Magenta)),
             Span::styled(")", Style::default().fg(Color::DarkGray)),
         ]));
         lines.push(Line::from(vec![
             Span::styled("Status: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", state.status), Style::default().fg(match state.status {
-                TargetStatus::Running => Color::Green,
-                TargetStatus::Building => Color::Yellow,
-                TargetStatus::Error(_) => Color::Red,
-                _ => Color::DarkGray,
-            })),
+            Span::styled(
+                format!("{}", state.status),
+                Style::default().fg(match state.status {
+                    TargetStatus::Running => Color::Green,
+                    TargetStatus::Building => Color::Yellow,
+                    TargetStatus::Error(_) => Color::Red,
+                    _ => Color::DarkGray,
+                }),
+            ),
         ]));
 
         if let Some(dur) = state.last_build_duration_ms {
@@ -451,30 +701,59 @@ fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 
         if let Some(ref err) = state.last_error {
             lines.push(Line::from(vec![
-                Span::styled("Error: ", Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Error: ",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(err.clone(), Style::default().fg(Color::LightRed)),
             ]));
         }
 
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled("File Changes:", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))));
+        lines.push(Line::from(Span::styled(
+            "File Changes:",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )));
         if state.changes.is_empty() {
-            lines.push(Line::from(Span::styled(" Watching for changes...", Style::default().fg(Color::DarkGray))));
+            lines.push(Line::from(Span::styled(
+                " Watching for changes...",
+                Style::default().fg(Color::DarkGray),
+            )));
         } else {
             for change in state.changes.iter().rev().take(5) {
-                lines.push(Line::from(Span::styled(format!(" {}", change), Style::default().fg(Color::Yellow))));
+                lines.push(Line::from(Span::styled(
+                    format!(" {}", change),
+                    Style::default().fg(Color::Yellow),
+                )));
             }
         }
     } else {
-        lines.push(Line::from(Span::styled("Combined View: All Workspace Targets", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))));
+        lines.push(Line::from(Span::styled(
+            "Combined View: All Workspace Targets",
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )));
         lines.push(Line::from(vec![
             Span::styled("Total Targets: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}", app.target_states.len()), Style::default().fg(Color::Cyan)),
+            Span::styled(
+                format!("{}", app.target_states.len()),
+                Style::default().fg(Color::Cyan),
+            ),
         ]));
-        let running_count = app.target_states.iter().filter(|s| s.status == TargetStatus::Running).count();
+        let running_count = app
+            .target_states
+            .iter()
+            .filter(|s| s.status == TargetStatus::Running)
+            .count();
         lines.push(Line::from(vec![
             Span::styled("Running: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(format!("{}/{}", running_count, app.target_states.len()), Style::default().fg(Color::Green)),
+            Span::styled(
+                format!("{}/{}", running_count, app.target_states.len()),
+                Style::default().fg(Color::Green),
+            ),
         ]));
     }
 
@@ -490,14 +769,31 @@ fn render_session_info_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
     let is_focused = app.session_panel == SessionPanel::Logs;
-    let border_color = if is_focused { Color::Cyan } else { Color::DarkGray };
-
-    let (logs_ref, scroll_offset, auto_scroll, level_filter, target_title) = if app.active_tab_idx < app.target_states.len() {
-        let state = &app.target_states[app.active_tab_idx];
-        (&state.logs, state.log_scroll_offset, state.auto_scroll, state.log_level_filter, format!("Logs: {} [{}]", state.target.name, state.target.platform))
+    let border_color = if is_focused {
+        Color::Cyan
     } else {
-        (&app.combined_logs, app.combined_scroll_offset, app.combined_auto_scroll, app.combined_level_filter, "Logs: All Targets Combined".to_string())
+        Color::DarkGray
     };
+
+    let (logs_ref, scroll_offset, auto_scroll, level_filter, target_title) =
+        if app.active_tab_idx < app.target_states.len() {
+            let state = &app.target_states[app.active_tab_idx];
+            (
+                &state.logs,
+                state.log_scroll_offset,
+                state.auto_scroll,
+                state.log_level_filter,
+                format!("Logs: {} [{}]", state.target.name, state.target.platform),
+            )
+        } else {
+            (
+                &app.combined_logs,
+                app.combined_scroll_offset,
+                app.combined_auto_scroll,
+                app.combined_level_filter,
+                "Logs: All Targets Combined".to_string(),
+            )
+        };
 
     let lvl_filter_text = match level_filter {
         Some(lvl) => format!(" [Level: {}] ", lvl),
@@ -510,7 +806,13 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
         format!(" [Scroll: +{} | Auto-scroll: OFF] ", scroll_offset)
     };
 
-    let title = format!(" {} ({} lines){}{} ", target_title, logs_ref.len(), lvl_filter_text, scroll_badge);
+    let title = format!(
+        " {} ({} lines){}{} ",
+        target_title,
+        logs_ref.len(),
+        lvl_filter_text,
+        scroll_badge
+    );
 
     let max_lines = area.height.saturating_sub(2) as usize;
     let total_logs = logs_ref.len();
@@ -538,9 +840,21 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
             let tag_str = entry.tag.as_deref().unwrap_or("app");
 
             let line = Line::from(vec![
-                Span::styled(format!("{} ", time_str), Style::default().fg(Color::DarkGray)),
-                Span::styled(level_badge, Style::default().fg(Color::Black).bg(badge_color).add_modifier(Modifier::BOLD)),
-                Span::styled(format!(" [{}] ", tag_str), Style::default().fg(Color::LightCyan)),
+                Span::styled(
+                    format!("{} ", time_str),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(
+                    level_badge,
+                    Style::default()
+                        .fg(Color::Black)
+                        .bg(badge_color)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" [{}] ", tag_str),
+                    Style::default().fg(Color::LightCyan),
+                ),
                 Span::styled(&entry.message, Style::default().fg(Color::White)),
             ]);
 
@@ -560,23 +874,77 @@ fn render_session_logs_panel(f: &mut Frame, app: &TuiApp, area: Rect) {
 
 fn render_session_footer(f: &mut Frame, _app: &TuiApp, area: Rect) {
     let footer_spans = vec![
-        Span::styled(" [1-9] ", Style::default().fg(Color::Black).bg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [1-9] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Switch Tab  "),
-        Span::styled(" [h/l] ", Style::default().fg(Color::Black).bg(Color::LightBlue).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [h/l] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightBlue)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Prev/Next Tab  "),
-        Span::styled(" [s] ", Style::default().fg(Color::Black).bg(Color::Green).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [s] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Start/Stop  "),
-        Span::styled(" [a] ", Style::default().fg(Color::Black).bg(Color::LightGreen).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [a] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Run All  "),
-        Span::styled(" [r] ", Style::default().fg(Color::Black).bg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [r] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Reload  "),
-        Span::styled(" [R] ", Style::default().fg(Color::Black).bg(Color::LightYellow).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [R] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Restart  "),
-        Span::styled(" [↑/↓] ", Style::default().fg(Color::Black).bg(Color::Magenta).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [↑/↓] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Scroll  "),
-        Span::styled(" [f] ", Style::default().fg(Color::Black).bg(Color::Blue).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [f] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Follow  "),
-        Span::styled(" [Esc] ", Style::default().fg(Color::Black).bg(Color::Red).add_modifier(Modifier::BOLD)),
+        Span::styled(
+            " [Esc] ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ),
         Span::raw(" Hub"),
     ];
 

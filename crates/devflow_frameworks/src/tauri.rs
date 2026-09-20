@@ -23,9 +23,13 @@ impl TauriFrameworkAdapter {
 
     pub fn find_tauri_binary(dir: &Path, is_release: bool, project_name: &str) -> Option<PathBuf> {
         let config = if is_release { "release" } else { "debug" };
-        
+
         // 1. Check src-tauri/target/<config>/<project_name>
-        let candidate = dir.join("src-tauri").join("target").join(config).join(project_name);
+        let candidate = dir
+            .join("src-tauri")
+            .join("target")
+            .join(config)
+            .join(project_name);
         if candidate.exists() {
             return Some(candidate);
         }
@@ -66,7 +70,9 @@ impl FrameworkAdapter for TauriFrameworkAdapter {
             b.command.clone()
         } else if ctx.project_dir.join("src-tauri/Cargo.toml").exists() {
             let mode = if ctx.is_release { "--release" } else { "" };
-            format!("cargo build --manifest-path src-tauri/Cargo.toml {}", mode).trim().to_string()
+            format!("cargo build --manifest-path src-tauri/Cargo.toml {}", mode)
+                .trim()
+                .to_string()
         } else {
             "npm run tauri build".to_string()
         };
@@ -78,16 +84,18 @@ impl FrameworkAdapter for TauriFrameworkAdapter {
         let mut cmd = Command::new(program);
         cmd.args(&args).current_dir(&ctx.project_dir);
 
-        let output = cmd.output().await
-            .map_err(|e| DevflowError::Build(format!("Failed to run Tauri build '{}': {}", cmd_str, e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DevflowError::Build(format!("Failed to run Tauri build '{}': {}", cmd_str, e))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
         let duration = start.elapsed().as_millis() as u64;
 
         if output.status.success() {
-            let artifact_path = Self::find_tauri_binary(&ctx.project_dir, ctx.is_release, &ctx.config.project.name)
-                .map(|p| p.to_string_lossy().to_string());
+            let artifact_path =
+                Self::find_tauri_binary(&ctx.project_dir, ctx.is_release, &ctx.config.project.name)
+                    .map(|p| p.to_string_lossy().to_string());
             Ok(BuildResult::ok(duration, artifact_path, stdout, stderr))
         } else {
             Ok(BuildResult::failed(
@@ -107,12 +115,16 @@ impl FrameworkAdapter for TauriFrameworkAdapter {
         let default_bin = format!("src-tauri/target/debug/{}", ctx.config.project.name);
         let bin_path = ctx.artifact_path.as_deref().unwrap_or(&default_bin);
         info!("Launching Tauri desktop application: {}", bin_path);
-        self.desktop_runner.launch(&ctx.project_dir, &ctx.device, Some(bin_path)).await
+        self.desktop_runner
+            .launch(&ctx.project_dir, &ctx.device, Some(bin_path))
+            .await
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Stopping Tauri application...");
-        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await
+        self.desktop_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await
     }
 
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
@@ -140,11 +152,19 @@ impl FrameworkAdapter for TauriFrameworkAdapter {
 
     async fn restart(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Restarting Tauri application...");
-        self.desktop_runner.stop(&ctx.project_dir, &ctx.device).await?;
+        self.desktop_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await?;
         self.launch(ctx).await
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
-        self.desktop_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        self.desktop_runner
+            .stream_logs(&ctx.project_dir, &ctx.device, tx)
+            .await
     }
 }

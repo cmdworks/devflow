@@ -30,7 +30,12 @@ impl ChangeClassifier {
             .unwrap_or("")
             .to_lowercase();
 
-        if !config.extensions.is_empty() && !config.extensions.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
+        if !config.extensions.is_empty()
+            && !config
+                .extensions
+                .iter()
+                .any(|e| e.eq_ignore_ascii_case(&ext))
+        {
             return ChangeAction::Ignore;
         }
 
@@ -82,4 +87,3 @@ mod tests {
         );
     }
 }
-

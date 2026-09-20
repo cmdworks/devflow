@@ -76,9 +76,15 @@ impl HttpServer {
             } else {
                 "***".to_string()
             };
-            info!("DevFlow MCP HTTP server listening on http://{} (token auth enabled: {})", addr, masked);
+            info!(
+                "DevFlow MCP HTTP server listening on http://{} (token auth enabled: {})",
+                addr, masked
+            );
         } else {
-            info!("DevFlow MCP HTTP server listening on http://{} (no auth)", addr);
+            info!(
+                "DevFlow MCP HTTP server listening on http://{} (no auth)",
+                addr
+            );
         }
 
         let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -223,12 +229,13 @@ mod tests {
 
         // Correct header -> pass
         let mut ok_headers = HeaderMap::new();
-        ok_headers.insert("authorization", HeaderValue::from_static("Bearer secret123"));
+        ok_headers.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer secret123"),
+        );
         assert!(check_auth(&state, &ok_headers, None));
 
         // Correct query param -> pass
         assert!(check_auth(&state, &headers, Some("secret123")));
     }
 }
-
-

@@ -11,9 +11,8 @@ use tokio::process::Command;
 use tokio::sync::mpsc;
 use tracing::{debug, info};
 
-static NAMESPACE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?:namespace|applicationId)\s*=?\s*["']([^"']+)["']"#).unwrap()
-});
+static NAMESPACE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"(?:namespace|applicationId)\s*=?\s*["']([^"']+)["']"#).unwrap());
 
 static LAUNCHER_ACTIVITY_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"<activity[^>]*android:name=["']([^"']+)["'][^>]*>([\s\S]*?)</activity>"#).unwrap()
@@ -77,7 +76,8 @@ impl KotlinFrameworkAdapter {
                         let activity_name = cap.get(1).map(|m| m.as_str().to_string());
                         let body = cap.get(2).map(|m| m.as_str()).unwrap_or("");
                         if body.contains("android.intent.action.MAIN")
-                            && (body.contains("android.intent.category.LAUNCHER") || body.contains("LAUNCHER"))
+                            && (body.contains("android.intent.category.LAUNCHER")
+                                || body.contains("LAUNCHER"))
                         {
                             main_activity = activity_name;
                             break;
@@ -138,7 +138,11 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
     async fn build(&self, ctx: &BuildContext) -> Result<BuildResult> {
         let start = Instant::now();
         let gradlew = Self::find_gradlew(&ctx.project_dir);
-        let task = if ctx.is_release { "assembleRelease" } else { "assembleDebug" };
+        let task = if ctx.is_release {
+            "assembleRelease"
+        } else {
+            "assembleDebug"
+        };
 
         #[cfg(unix)]
         {
@@ -153,7 +157,12 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
             }
         }
 
-        info!("Running '{} {}' in {}", gradlew, task, ctx.project_dir.display());
+        info!(
+            "Running '{} {}' in {}",
+            gradlew,
+            task,
+            ctx.project_dir.display()
+        );
 
         let mut cmd = Command::new(&gradlew);
         cmd.arg(task).current_dir(&ctx.project_dir);
@@ -166,10 +175,9 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
             cmd.env("ANDROID_SDK_ROOT", &android_home);
         }
 
-        let output = cmd
-            .output()
-            .await
-            .map_err(|e| DevflowError::Build(format!("Failed to run Gradle build ({}): {}", gradlew, e)))?;
+        let output = cmd.output().await.map_err(|e| {
+            DevflowError::Build(format!("Failed to run Gradle build ({}): {}", gradlew, e))
+        })?;
 
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
         let stderr = String::from_utf8_lossy(&output.stderr).to_string();
@@ -198,20 +206,23 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
     }
 
     async fn install(&self, ctx: &DeviceContext) -> Result<()> {
-        let dynamic_apk = Self::find_built_apk(&ctx.project_dir, false)
-            .map(|p| p.to_string_lossy().to_string());
+        let dynamic_apk =
+            Self::find_built_apk(&ctx.project_dir, false).map(|p| p.to_string_lossy().to_string());
         let apk_path = ctx.artifact_path.as_deref().or(dynamic_apk.as_deref());
 
-        self.android_runner.install(&ctx.project_dir, &ctx.device, apk_path).await
+        self.android_runner
+            .install(&ctx.project_dir, &ctx.device, apk_path)
+            .await
     }
-
 
     async fn launch(&self, ctx: &DeviceContext) -> Result<()> {
         let (inferred_pkg, inferred_activity) = Self::inspect_android_project(&ctx.project_dir);
 
         let launch_component = if let Some(configured) = &ctx.config.project.package_id {
             configured.clone()
-        } else if let (Some(pkg), Some(activity)) = (inferred_pkg.as_deref(), inferred_activity.as_deref()) {
+        } else if let (Some(pkg), Some(activity)) =
+            (inferred_pkg.as_deref(), inferred_activity.as_deref())
+        {
             let full_activity = if activity.starts_with('.') {
                 format!("{}{}", pkg, activity)
             } else if !activity.contains('.') {
@@ -227,12 +238,16 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
         };
 
         debug!("Resolved Android launch intent: {}", launch_component);
-        self.android_runner.launch(&ctx.project_dir, &ctx.device, Some(&launch_component)).await
+        self.android_runner
+            .launch(&ctx.project_dir, &ctx.device, Some(&launch_component))
+            .await
     }
 
     async fn stop(&self, ctx: &DeviceContext) -> Result<()> {
         info!("Stopping Kotlin/Android application...");
-        self.android_runner.stop(&ctx.project_dir, &ctx.device).await
+        self.android_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await
     }
 
     async fn reload(&self, ctx: &ReloadContext) -> Result<()> {
@@ -246,12 +261,20 @@ impl FrameworkAdapter for KotlinFrameworkAdapter {
     }
 
     async fn restart(&self, ctx: &DeviceContext) -> Result<()> {
-        self.android_runner.stop(&ctx.project_dir, &ctx.device).await?;
+        self.android_runner
+            .stop(&ctx.project_dir, &ctx.device)
+            .await?;
         self.launch(ctx).await
     }
 
-    async fn stream_logs(&self, ctx: &DeviceContext, tx: mpsc::Sender<LogEntry>) -> Result<tokio::task::JoinHandle<()>> {
-        self.android_runner.stream_logs(&ctx.project_dir, &ctx.device, tx).await
+    async fn stream_logs(
+        &self,
+        ctx: &DeviceContext,
+        tx: mpsc::Sender<LogEntry>,
+    ) -> Result<tokio::task::JoinHandle<()>> {
+        self.android_runner
+            .stream_logs(&ctx.project_dir, &ctx.device, tx)
+            .await
     }
 }
 
@@ -277,7 +300,9 @@ mod tests {
         for cap in LAUNCHER_ACTIVITY_RE.captures_iter(sample_manifest) {
             let activity_name = cap.get(1).map(|m| m.as_str().to_string());
             let body = cap.get(2).map(|m| m.as_str()).unwrap_or("");
-            if body.contains("android.intent.action.MAIN") && body.contains("android.intent.category.LAUNCHER") {
+            if body.contains("android.intent.action.MAIN")
+                && body.contains("android.intent.category.LAUNCHER")
+            {
                 matched_activity = activity_name;
                 break;
             }

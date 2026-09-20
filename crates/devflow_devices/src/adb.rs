@@ -6,17 +6,25 @@ pub struct AdbDiscoverer;
 
 impl AdbDiscoverer {
     pub fn resolve_adb_binary() -> String {
-        if std::process::Command::new("adb").arg("version").output().is_ok() {
+        if std::process::Command::new("adb")
+            .arg("version")
+            .output()
+            .is_ok()
+        {
             return "adb".to_string();
         }
         if let Ok(home) = std::env::var("ANDROID_HOME") {
-            let p = std::path::Path::new(&home).join("platform-tools").join("adb");
+            let p = std::path::Path::new(&home)
+                .join("platform-tools")
+                .join("adb");
             if p.exists() {
                 return p.to_string_lossy().to_string();
             }
         }
         if let Ok(home) = std::env::var("ANDROID_SDK_ROOT") {
-            let p = std::path::Path::new(&home).join("platform-tools").join("adb");
+            let p = std::path::Path::new(&home)
+                .join("platform-tools")
+                .join("adb");
             if p.exists() {
                 return p.to_string_lossy().to_string();
             }
@@ -32,7 +40,11 @@ impl AdbDiscoverer {
 
     pub async fn discover() -> Vec<Device> {
         let adb_bin = Self::resolve_adb_binary();
-        let output = match Command::new(&adb_bin).args(["devices", "-l"]).output().await {
+        let output = match Command::new(&adb_bin)
+            .args(["devices", "-l"])
+            .output()
+            .await
+        {
             Ok(out) if out.status.success() => out,
             Ok(_) | Err(_) => {
                 debug!("adb not found or adb devices failed");

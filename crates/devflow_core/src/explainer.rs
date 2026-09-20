@@ -13,13 +13,26 @@ pub struct ErrorExplanation {
 pub struct ToolchainExplainer;
 
 impl ToolchainExplainer {
-    pub fn explain_error(framework: &str, stderr: &str, stdout: &str, target_name: &str) -> Option<ErrorExplanation> {
+    pub fn explain_error(
+        framework: &str,
+        stderr: &str,
+        stdout: &str,
+        target_name: &str,
+    ) -> Option<ErrorExplanation> {
         let combined = format!("{}\n{}", stderr, stdout).to_lowercase();
         let fw = framework.to_lowercase();
 
         // 1. Swift & Apple Toolchain Errors
-        if fw.contains("swift") || fw.contains("xcode") || fw.contains("apple") || combined.contains("swift") || combined.contains("xcode") {
-            if combined.contains("tool 'xcodebuild' requires xcode") || combined.contains("active developer directory '/library/developer/commandlinetools'") {
+        if fw.contains("swift")
+            || fw.contains("xcode")
+            || fw.contains("apple")
+            || combined.contains("swift")
+            || combined.contains("xcode")
+        {
+            if combined.contains("tool 'xcodebuild' requires xcode")
+                || combined
+                    .contains("active developer directory '/library/developer/commandlinetools'")
+            {
                 return Some(Self::build_explanation(
                     "swift",
                     target_name,
@@ -41,13 +54,14 @@ impl ToolchainExplainer {
                     "Xcode License Agreement Not Accepted",
                     "Xcode license agreement must be accepted before compiler tools can run.",
                     "sudo xcodebuild -license accept",
-                    vec![
-                        "Run: sudo xcodebuild -license accept".to_string(),
-                    ],
+                    vec!["Run: sudo xcodebuild -license accept".to_string()],
                 ));
             }
 
-            if combined.contains("unable to find sdk 'macosx'") || combined.contains("active developer path") || combined.contains("xcode-select: error") {
+            if combined.contains("unable to find sdk 'macosx'")
+                || combined.contains("active developer path")
+                || combined.contains("xcode-select: error")
+            {
                 return Some(Self::build_explanation(
                     "swift",
                     target_name,
@@ -61,7 +75,10 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("cannot find module") || combined.contains("no such module") || combined.contains("missing package dependency") {
+            if combined.contains("cannot find module")
+                || combined.contains("no such module")
+                || combined.contains("missing package dependency")
+            {
                 return Some(Self::build_explanation(
                     "swift",
                     target_name,
@@ -76,7 +93,10 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("database is locked") || combined.contains("invalid build database") || combined.contains("corrupt build database") {
+            if combined.contains("database is locked")
+                || combined.contains("invalid build database")
+                || combined.contains("corrupt build database")
+            {
                 return Some(Self::build_explanation(
                     "swift",
                     target_name,
@@ -92,8 +112,16 @@ impl ToolchainExplainer {
         }
 
         // 2. Kotlin / Android & Gradle Errors
-        if fw.contains("kotlin") || fw.contains("android") || fw.contains("gradle") || combined.contains("gradle") || combined.contains("android") {
-            if combined.contains("java_home is not set") || combined.contains("java: command not found") || combined.contains("could not find or load main class") {
+        if fw.contains("kotlin")
+            || fw.contains("android")
+            || fw.contains("gradle")
+            || combined.contains("gradle")
+            || combined.contains("android")
+        {
+            if combined.contains("java_home is not set")
+                || combined.contains("java: command not found")
+                || combined.contains("could not find or load main class")
+            {
                 return Some(Self::build_explanation(
                     "kotlin",
                     target_name,
@@ -108,7 +136,9 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("unsupported class file major version") || combined.contains("incompatible with this version of java") {
+            if combined.contains("unsupported class file major version")
+                || combined.contains("incompatible with this version of java")
+            {
                 return Some(Self::build_explanation(
                     "kotlin",
                     target_name,
@@ -122,7 +152,10 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("sdk location not found") || combined.contains("android_home") || combined.contains("sdk.dir") {
+            if combined.contains("sdk location not found")
+                || combined.contains("android_home")
+                || combined.contains("sdk.dir")
+            {
                 return Some(Self::build_explanation(
                     "kotlin",
                     target_name,
@@ -137,7 +170,9 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("failed to find target with hash string 'android-") || combined.contains("platforms;android-") {
+            if combined.contains("failed to find target with hash string 'android-")
+                || combined.contains("platforms;android-")
+            {
                 return Some(Self::build_explanation(
                     "kotlin",
                     target_name,
@@ -158,13 +193,14 @@ impl ToolchainExplainer {
                     "Gradle Wrapper Not Executable",
                     "The gradlew shell script lacks execute (+x) permissions.",
                     "chmod +x gradlew",
-                    vec![
-                        "Grant execute permission: chmod +x gradlew".to_string(),
-                    ],
+                    vec!["Grant execute permission: chmod +x gradlew".to_string()],
                 ));
             }
 
-            if combined.contains("could not resolve all dependencies") || combined.contains("connection refused") || combined.contains("timed out") {
+            if combined.contains("could not resolve all dependencies")
+                || combined.contains("connection refused")
+                || combined.contains("timed out")
+            {
                 return Some(Self::build_explanation(
                     "kotlin",
                     target_name,
@@ -172,16 +208,25 @@ impl ToolchainExplainer {
                     "Network error or missing remote repository while downloading dependencies.",
                     "./gradlew assembleDebug --refresh-dependencies",
                     vec![
-                        "Refresh dependencies: ./gradlew assembleDebug --refresh-dependencies".to_string(),
-                        "Verify network connection to maven.google.com and repo.maven.apache.org".to_string(),
+                        "Refresh dependencies: ./gradlew assembleDebug --refresh-dependencies"
+                            .to_string(),
+                        "Verify network connection to maven.google.com and repo.maven.apache.org"
+                            .to_string(),
                     ],
                 ));
             }
         }
 
         // 3. Rust & Cargo Errors
-        if fw.contains("cargo") || fw.contains("rust") || combined.contains("cargo") || combined.contains("rustc") {
-            if combined.contains("linker `cc` not found") || combined.contains("error: linker") || combined.contains("clang: error") {
+        if fw.contains("cargo")
+            || fw.contains("rust")
+            || combined.contains("cargo")
+            || combined.contains("rustc")
+        {
+            if combined.contains("linker `cc` not found")
+                || combined.contains("error: linker")
+                || combined.contains("clang: error")
+            {
                 return Some(Self::build_explanation(
                     "cargo",
                     target_name,
@@ -195,7 +240,10 @@ impl ToolchainExplainer {
                 ));
             }
 
-            if combined.contains("openssl") && (combined.contains("could not find directory") || combined.contains("openssl-sys")) {
+            if combined.contains("openssl")
+                && (combined.contains("could not find directory")
+                    || combined.contains("openssl-sys"))
+            {
                 return Some(Self::build_explanation(
                     "cargo",
                     target_name,
@@ -217,29 +265,28 @@ impl ToolchainExplainer {
                     "pkg-config Tool Missing",
                     "Native system dependency discovery via pkg-config failed.",
                     "brew install pkg-config",
-                    vec![
-                        "Install pkg-config: brew install pkg-config".to_string(),
-                    ],
+                    vec!["Install pkg-config: brew install pkg-config".to_string()],
                 ));
             }
         }
 
         // 4. Tauri Framework Errors
         if fw.contains("tauri") || combined.contains("tauri") {
-            if combined.contains("tauri: command not found") || combined.contains("cannot find module '@tauri-apps/cli'") {
+            if combined.contains("tauri: command not found")
+                || combined.contains("cannot find module '@tauri-apps/cli'")
+            {
                 return Some(Self::build_explanation(
                     "tauri",
                     target_name,
                     "Tauri CLI Missing",
                     "Tauri CLI package is not installed in the project dependencies.",
                     "npm install -D @tauri-apps/cli",
-                    vec![
-                        "Install Tauri CLI: npm install -D @tauri-apps/cli".to_string(),
-                    ],
+                    vec!["Install Tauri CLI: npm install -D @tauri-apps/cli".to_string()],
                 ));
             }
 
-            if combined.contains("failed to build frontend") || combined.contains("vite: not found") {
+            if combined.contains("failed to build frontend") || combined.contains("vite: not found")
+            {
                 return Some(Self::build_explanation(
                     "tauri",
                     target_name,
@@ -267,14 +314,27 @@ impl ToolchainExplainer {
     ) -> ErrorExplanation {
         let mut banner = String::new();
         banner.push_str("\r\n\x1b[31;1m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\r\n");
-        banner.push_str(&format!("\x1b[31;1m ✗ BUILD FAILED:\x1b[0m \x1b[1;37m{} [{}]\x1b[0m\r\n", target_name, framework));
-        banner.push_str(&format!("\x1b[33;1m 💡 Issue Detected:\x1b[0m \x1b[38;5;222m{}\x1b[0m\r\n", title));
+        banner.push_str(&format!(
+            "\x1b[31;1m ✗ BUILD FAILED:\x1b[0m \x1b[1;37m{} [{}]\x1b[0m\r\n",
+            target_name, framework
+        ));
+        banner.push_str(&format!(
+            "\x1b[33;1m 💡 Issue Detected:\x1b[0m \x1b[38;5;222m{}\x1b[0m\r\n",
+            title
+        ));
         banner.push_str(&format!("    \x1b[90m{}\x1b[0m\r\n", issue));
         banner.push_str("\x1b[36;1m 🔧 How to Fix:\x1b[0m\r\n");
         for (i, step) in steps.iter().enumerate() {
-            banner.push_str(&format!("    \x1b[36m{}.\x1b[0m \x1b[97m{}\x1b[0m\r\n", i + 1, step));
+            banner.push_str(&format!(
+                "    \x1b[36m{}.\x1b[0m \x1b[97m{}\x1b[0m\r\n",
+                i + 1,
+                step
+            ));
         }
-        banner.push_str(&format!("\x1b[32;1m 📋 Quick Command:\x1b[0m \x1b[40;1;32m {} \x1b[0m\r\n", fix_hint));
+        banner.push_str(&format!(
+            "\x1b[32;1m 📋 Quick Command:\x1b[0m \x1b[40;1;32m {} \x1b[0m\r\n",
+            fix_hint
+        ));
         banner.push_str("\x1b[31;1m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\x1b[0m\r\n");
 
         ErrorExplanation {

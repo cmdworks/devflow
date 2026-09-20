@@ -2,8 +2,14 @@ use devflow_protocol::{LogEntry, LogLevel};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CrashCategory {
-    JavaException { exception_class: String, message: String },
-    RustPanic { location: Option<String>, message: String },
+    JavaException {
+        exception_class: String,
+        message: String,
+    },
+    RustPanic {
+        location: Option<String>,
+        message: String,
+    },
     Segfault,
     OutOfMemory,
     GenericCrash(String),
@@ -17,14 +23,21 @@ impl LogClassifier {
         let lower = msg.to_lowercase();
 
         if lower.contains("fatal exception:") {
-            let class = msg.split("FATAL EXCEPTION:").nth(1).unwrap_or("").trim().to_string();
+            let class = msg
+                .split("FATAL EXCEPTION:")
+                .nth(1)
+                .unwrap_or("")
+                .trim()
+                .to_string();
             return Some(CrashCategory::JavaException {
                 exception_class: class,
                 message: msg.clone(),
             });
         }
 
-        if lower.contains("panicked at") || lower.contains("thread '") && lower.contains("' panicked") {
+        if lower.contains("panicked at")
+            || lower.contains("thread '") && lower.contains("' panicked")
+        {
             return Some(CrashCategory::RustPanic {
                 location: None,
                 message: msg.clone(),

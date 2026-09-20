@@ -31,7 +31,7 @@ impl FileWatcher {
         let (std_tx, std_rx) = std_mpsc::channel();
         let debounce_ms = self.config.debounce_ms;
         let mut debouncer = new_debouncer(Duration::from_millis(debounce_ms), std_tx)
-            .map_err(|e| DevflowError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+            .map_err(|e| DevflowError::Io(std::io::Error::other(e.to_string())))?;
 
         let watch_paths = if self.config.paths.is_empty() {
             vec![self.root_dir.clone()]
@@ -49,14 +49,14 @@ impl FileWatcher {
             debouncer
                 .watcher()
                 .watch(&self.root_dir, notify::RecursiveMode::Recursive)
-                .map_err(|e| DevflowError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                .map_err(|e| DevflowError::Io(std::io::Error::other(e.to_string())))?;
         } else {
             for path in &watch_paths {
                 info!("Watching directory: {}", path.display());
                 debouncer
                     .watcher()
                     .watch(path, notify::RecursiveMode::Recursive)
-                    .map_err(|e| DevflowError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string())))?;
+                    .map_err(|e| DevflowError::Io(std::io::Error::other(e.to_string())))?;
             }
         }
 
@@ -75,7 +75,9 @@ impl FileWatcher {
                             let action = ChangeClassifier::classify(&event.path, &config);
                             if action != ChangeAction::Ignore {
                                 changed_paths.push(event.path);
-                                if action == ChangeAction::Restart || chosen_action == ChangeAction::Ignore {
+                                if action == ChangeAction::Restart
+                                    || chosen_action == ChangeAction::Ignore
+                                {
                                     chosen_action = action;
                                 }
                             }

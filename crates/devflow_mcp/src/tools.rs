@@ -127,6 +127,6 @@ pub fn get_tool_definitions() -> Vec<Value> {
                 },
                 "required": ["session_id"]
             }
-        })
+        }),
     ]
 }

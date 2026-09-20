@@ -34,6 +34,9 @@ pub enum DevflowEvent {
         session_id: Option<String>,
         message: String,
     },
+    McpAccessLog {
+        entry: serde_json::Value,
+    },
 }
 
 #[derive(Clone)]

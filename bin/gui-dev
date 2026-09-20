@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# DevFlow GUI-Dev — development Tauri binary wrapper
+# Rebuilds frontend if modified, compiles dev binary incrementally, and runs it.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+export DEVFLOW_WORKSPACE_ROOT="${DEVFLOW_WORKSPACE_ROOT:-$REPO_ROOT}"
+
+DEBUG_BIN="$DEVFLOW_WORKSPACE_ROOT/clients/tauri_app/src-tauri/target/debug/devflow-desktop"
+
+# Check if frontend needs rebuild (dist missing or src newer than dist/index.html)
+if [ ! -d "$REPO_ROOT/clients/tauri_app/dist" ] || [ -n "$(find "$REPO_ROOT/clients/tauri_app/src" -newer "$REPO_ROOT/clients/tauri_app/dist/index.html" 2>/dev/null | head -n 1)" ]; then
+    >&2 echo "⚡ Frontend changes detected. Rebuilding UI bundle..."
+    (cd "$REPO_ROOT/clients/tauri_app" && npm run build) >&2
+fi
+
+# Cargo handles incremental builds automatically (<0.1s when up to date)
+cargo build --manifest-path "$REPO_ROOT/clients/tauri_app/src-tauri/Cargo.toml" >&2
+
+exec "$DEBUG_BIN" "$@"

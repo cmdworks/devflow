@@ -10,13 +10,26 @@ async fn main() -> anyhow::Result<()> {
 
     match action {
         CliAction::Executed => Ok(()),
-        CliAction::LaunchTui { dir } => {
-            TuiRunner::run_hub(dir).await.map_err(|e| anyhow::anyhow!("{}", e))
-        }
-        CliAction::LaunchGui { dir, port, open_browser } => {
+        CliAction::LaunchTui { dir } => TuiRunner::run_hub(dir)
+            .await
+            .map_err(|e| anyhow::anyhow!("{}", e)),
+        CliAction::LaunchGui {
+            dir,
+            port,
+            open_browser,
+        } => {
             // Check if devflow-desktop is available or running
-            println!("{} Starting DevFlow GUI on port {} for workspace '{}'...", "⚡".cyan().bold(), port, dir.display());
-            let url = format!("http://localhost:{}?dir={}", port, urlencoding_simple(&dir.display().to_string()));
+            println!(
+                "{} Starting DevFlow GUI on port {} for workspace '{}'...",
+                "⚡".cyan().bold(),
+                port,
+                dir.display()
+            );
+            let url = format!(
+                "http://localhost:{}?dir={}",
+                port,
+                urlencoding_simple(&dir.display().to_string())
+            );
             if open_browser {
                 let _ = open::that(&url);
             }
