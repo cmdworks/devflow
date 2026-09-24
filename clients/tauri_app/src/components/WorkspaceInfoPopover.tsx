@@ -5,6 +5,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { KnownWorkspace } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface WorkspaceInfoPopoverProps {
   workspace: KnownWorkspace;
@@ -23,12 +24,10 @@ export const WorkspaceInfoPopover: React.FC<WorkspaceInfoPopoverProps> = ({
 
   const handleCopyPath = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(workspace.path);
+    const ok = await copyToClipboard(workspace.path);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
     }
   };
 

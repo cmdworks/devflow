@@ -13,13 +13,6 @@
   "dependencies": {
     "@termaxjs/web": "^0.2.1",
     "@termaxjs/web-addons": "^0.2.1",
-    "@termaxjs/web-adapter": "^0.2.1",
-    "@termaxjs/web-ai": "^0.2.1",
-    "@termaxjs/web-core": "^0.2.1",
-    "@termaxjs/web-react": "^0.2.1",
-    "@termaxjs/web-source-control": "^0.2.1",
-    "@termaxjs/web-ui": "^0.2.1",
-    "@termaxjs/web-ui-components": "^0.2.1",
     "lucide-react": "^0.475.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"

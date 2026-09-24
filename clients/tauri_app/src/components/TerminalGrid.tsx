@@ -13,10 +13,13 @@ interface TerminalGridProps {
   levelFilter?: string;
   tagFilter?: string;
   searchQuery?: string;
+  executingActions?: Record<string, string>;
   onFocusPane: (paneId: string) => void;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
   onRestart: (targetId: string) => void;
+  onExecuteAction?: (targetId: string, action: string, port?: number) => void;
+  onOpenDevOptions?: (targetId?: string) => void;
   onSplitRight: (paneId: string) => void;
   onSplitDown: (paneId: string) => void;
   onToggleMaximize: (paneId: string) => void;
@@ -35,7 +38,14 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
   levelFilter = "ALL",
   tagFilter = "",
   searchQuery = "",
+  executingActions = {},
   onFocusPane,
+  onToggleRun,
+  onReload,
+  onRestart,
+  onExecuteAction,
+  onOpenDevOptions,
+  onClearLogs,
   onOpenAllPanes,
   onOpenCombinedPane,
 }) => {
@@ -75,7 +85,14 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
             levelFilter={levelFilter}
             tagFilter={tagFilter}
             searchQuery={searchQuery}
+            executingAction={executingActions[maxPane.targetId]}
             onFocusPane={onFocusPane}
+            onToggleRun={onToggleRun}
+            onReload={onReload}
+            onRestart={onRestart}
+            onExecuteAction={onExecuteAction}
+            onOpenDevOptions={onOpenDevOptions}
+            onClearLogs={onClearLogs}
           />
         </div>
       );
@@ -97,7 +114,14 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
             levelFilter={levelFilter}
             tagFilter={tagFilter}
             searchQuery={searchQuery}
+            executingAction={executingActions[currentPane.targetId]}
             onFocusPane={onFocusPane}
+            onToggleRun={onToggleRun}
+            onReload={onReload}
+            onRestart={onRestart}
+            onExecuteAction={onExecuteAction}
+            onOpenDevOptions={onOpenDevOptions}
+            onClearLogs={onClearLogs}
           />
         </div>
       );
@@ -124,7 +148,14 @@ export const TerminalGrid: React.FC<TerminalGridProps> = ({
           levelFilter={levelFilter}
           tagFilter={tagFilter}
           searchQuery={searchQuery}
+          executingAction={executingActions[pane.targetId]}
           onFocusPane={onFocusPane}
+          onToggleRun={onToggleRun}
+          onReload={onReload}
+          onRestart={onRestart}
+          onExecuteAction={onExecuteAction}
+          onOpenDevOptions={onOpenDevOptions}
+          onClearLogs={onClearLogs}
         />
       ))}
     </div>

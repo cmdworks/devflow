@@ -14,6 +14,7 @@ import {
   Sliders,
 } from "lucide-react";
 import type { ProjectTarget, PaneInfo, ActiveSessionInfo, Device } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface WorkspaceOverviewViewProps {
   workspaceName: string;
@@ -65,11 +66,11 @@ export const WorkspaceOverviewView: React.FC<WorkspaceOverviewViewProps> = ({
   const [copiedPath, setCopiedPath] = useState<boolean>(false);
 
   const handleCopyPath = async () => {
-    try {
-      await navigator.clipboard.writeText(workspacePath);
+    const ok = await copyToClipboard(workspacePath);
+    if (ok) {
       setCopiedPath(true);
       setTimeout(() => setCopiedPath(false), 2000);
-    } catch (_) {}
+    }
   };
 
   const runningCount = openPanes.filter(

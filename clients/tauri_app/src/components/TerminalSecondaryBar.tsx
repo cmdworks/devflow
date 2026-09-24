@@ -11,11 +11,10 @@ import {
   Grid,
   Square,
   ChevronDown,
-  Play,
-  Zap,
-  RotateCw,
   ArrowUpRight,
   ListTree,
+  Copy,
+  Check,
 } from "lucide-react";
 import type { PaneInfo, ProjectTarget } from "../types";
 import { LayoutPickerModal } from "./LayoutPickerModal";
@@ -38,12 +37,10 @@ interface TerminalSecondaryBarProps {
   onChangeLayout: (mode: LayoutMode) => void;
   onToggleMaximize: () => void;
   onToggleLogTree?: () => void;
+  onCopyActiveLogs?: () => Promise<boolean> | void;
   onClearActiveLogs: () => void;
   onSelectLevel?: (lvl: string) => void;
   onChangeSearch?: (query: string) => void;
-  onToggleRunTarget?: (targetId: string) => void;
-  onReloadTarget?: (targetId: string) => void;
-  onRestartTarget?: (targetId: string) => void;
 }
 
 export const TerminalSecondaryBar: React.FC<TerminalSecondaryBarProps> = ({
@@ -60,14 +57,21 @@ export const TerminalSecondaryBar: React.FC<TerminalSecondaryBarProps> = ({
   onChangeLayout,
   onToggleMaximize,
   onToggleLogTree,
+  onCopyActiveLogs,
   onClearActiveLogs,
-  onToggleRunTarget,
-  onReloadTarget,
-  onRestartTarget,
 }) => {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [isLayoutModalOpen, setIsLayoutModalOpen] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const addMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const handleCopyLogs = async () => {
+    if (onCopyActiveLogs) {
+      await onCopyActiveLogs();
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -82,8 +86,6 @@ export const TerminalSecondaryBar: React.FC<TerminalSecondaryBarProps> = ({
   }, [isAddMenuOpen]);
 
   const isCombinedOpen = panes.some((p) => p.isCombined);
-  const activePane = panes.find((p) => p.id === activePaneId);
-  const isRunning = activePane && (activePane.status === "running" || activePane.status === "building");
 
   return (
     <div className="terminal-secondary-bar">
@@ -232,42 +234,6 @@ export const TerminalSecondaryBar: React.FC<TerminalSecondaryBarProps> = ({
                   </span>
                 )}
               </button>
-
-              <div className="dropdown-divider" />
-              <div className="dropdown-label">SPLIT SHORTCUTS</div>
-
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  onChangeLayout("split-h");
-                  setIsAddMenuOpen(false);
-                }}
-              >
-                <Columns size={12} color="#38bdf8" />
-                <span>Split Right (Side by Side)</span>
-              </button>
-
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  onChangeLayout("split-v");
-                  setIsAddMenuOpen(false);
-                }}
-              >
-                <Rows size={12} color="#38bdf8" />
-                <span>Split Down (Stacked)</span>
-              </button>
-
-              <button
-                className="dropdown-item"
-                onClick={() => {
-                  onChangeLayout("grid");
-                  setIsAddMenuOpen(false);
-                }}
-              >
-                <Grid size={12} color="#38bdf8" />
-                <span>2×2 Quad Grid</span>
-              </button>
             </div>
           )}
         </div>
@@ -275,38 +241,15 @@ export const TerminalSecondaryBar: React.FC<TerminalSecondaryBarProps> = ({
 
       {/* 2. Right: Active Target Controls, Layout Customizer Modal, Clear & Maximize */}
       <div className="terminal-secondary-tools">
-        {/* Active Target Actions (if single target pane) */}
-        {activePane && !activePane.isCombined && onToggleRunTarget && (
-          <div className="pane-quick-actions">
-            <button
-              className={`btn-pane-action ${isRunning ? "running" : "run"}`}
-              onClick={() => onToggleRunTarget(activePane.targetId)}
-              title={isRunning ? "Stop Target" : "Run Target"}
-            >
-              {isRunning ? <Square size={11} fill="currentColor" /> : <Play size={11} fill="currentColor" />}
-            </button>
-
-            {onReloadTarget && (
-              <button
-                className="btn-pane-action"
-                onClick={() => onReloadTarget(activePane.targetId)}
-                title="Hot Reload"
-              >
-                <Zap size={11} color="#f59e0b" />
-              </button>
-            )}
-
-            {onRestartTarget && (
-              <button
-                className="btn-pane-action"
-                onClick={() => onRestartTarget(activePane.targetId)}
-                title="Restart Process"
-              >
-                <RotateCw size={11} color="#06b6d4" />
-              </button>
-            )}
-          </div>
-        )}
+        {/* Copy Active Terminal Logs */}
+        <button
+          className={`btn-terminal-util ${isCopied ? "copied" : ""}`}
+          onClick={handleCopyLogs}
+          title="Copy Active Terminal Logs (⌘C)"
+        >
+          {isCopied ? <Check size={12} color="#10b981" /> : <Copy size={12} />}
+          <span>{isCopied ? "Copied" : "Copy"}</span>
+        </button>
 
         <div className="tool-divider" />
 

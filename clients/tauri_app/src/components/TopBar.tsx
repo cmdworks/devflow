@@ -12,8 +12,11 @@ import {
   Loader2,
   Sliders,
   Sparkles,
+  CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import type { ViewSection, UpdateCheckResponse } from "../types";
+import type { TargetActionFeedback } from "./ActionStatusToast";
 
 interface TopBarProps {
   workspaceName: string;
@@ -28,6 +31,7 @@ interface TopBarProps {
   anyTargetRunning?: boolean;
   isStartingAll?: boolean;
   isStoppingAll?: boolean;
+  actionFeedback?: TargetActionFeedback | null;
   updateAvailable?: UpdateCheckResponse | null;
   onChangeSearch?: (query: string) => void;
   onSelectLevel?: (level: string) => void;
@@ -55,6 +59,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   anyTargetRunning = false,
   isStartingAll = false,
   isStoppingAll = false,
+  actionFeedback,
   updateAvailable,
   onChangeSearch,
   onSelectLevel,
@@ -210,6 +215,27 @@ export const TopBar: React.FC<TopBarProps> = ({
             <Sliders size={12} color="#38bdf8" />
             <span>Options</span>
           </button>
+        )}
+
+        {/* Live Active Task / Action Indicator */}
+        {actionFeedback && (
+          <div
+            className={`topbar-task-pill ${actionFeedback.status}`}
+            title={actionFeedback.message || actionFeedback.actionTitle}
+          >
+            {actionFeedback.status === "pending" ? (
+              <Loader2 size={11} className="animate-spin text-cyan" />
+            ) : actionFeedback.status === "success" ? (
+              <CheckCircle2 size={11} color="#10b981" />
+            ) : (
+              <AlertTriangle size={11} color="#ef4444" />
+            )}
+            <span className="topbar-task-pill-label">
+              {actionFeedback.status === "pending"
+                ? actionFeedback.message || `Running ${actionFeedback.actionTitle}...`
+                : actionFeedback.message || `${actionFeedback.actionTitle} done`}
+            </span>
+          </div>
         )}
       </div>
 

@@ -6,15 +6,27 @@ import {
   RotateCcw,
   Copy,
   Check,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
   Sparkles,
   Search,
 } from "lucide-react";
 import type { Device } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
+
+interface ToastInfo {
+  id: number;
+  kind: "success" | "error" | "info";
+  message: string;
+}
+
+let _deviceToastId = 0;
 
 interface DevicesViewProps {
   devices: Device[];
   onRefreshDevices: () => void;
-  onBootEmulator: (name: string) => void;
+  onBootEmulator: (name: string) => Promise<{ success?: boolean; message?: string; error?: string } | void> | void;
 }
 
 export const DevicesView: React.FC<DevicesViewProps> = ({
@@ -28,6 +40,13 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [platformFilter, setPlatformFilter] = useState<"all" | "android" | "apple" | "desktop" | "emulators">("all");
   const [bootingName, setBootingName] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastInfo[]>([]);
+
+  const showToast = (kind: "success" | "error" | "info", message: string) => {
+    const id = ++_deviceToastId;
+    setToasts((prev) => [...prev, { id, kind, message }]);
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4500);
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -38,21 +57,34 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
     }
   };
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(text);
-    setTimeout(() => setCopiedId(null), 1500);
+  const handleCopy = async (text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedId(text);
+      setTimeout(() => setCopiedId(null), 1500);
+    }
   };
 
   const handleBoot = async (name: string) => {
     const trimmed = name.trim();
-    if (trimmed) {
-      setBootingName(trimmed);
-      try {
-        await onBootEmulator(trimmed);
-      } finally {
-        setTimeout(() => setBootingName(null), 3000);
+    if (!trimmed) return;
+    setBootingName(trimmed);
+    try {
+      const res = await onBootEmulator(trimmed);
+      if (res && typeof res === "object") {
+        if (res.success) {
+          showToast("success", res.message || `Virtual device '${trimmed}' booted successfully.`);
+        } else {
+          showToast("error", res.error || `Failed to boot virtual device '${trimmed}'.`);
+        }
+      } else {
+        showToast("info", `Boot signal dispatched for '${trimmed}'.`);
       }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      showToast("error", `Failed to launch '${trimmed}': ${msg}`);
+    } finally {
+      setTimeout(() => setBootingName(null), 2500);
     }
   };
 
@@ -108,6 +140,18 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
 
   return (
     <div className="view-container">
+      {/* Toast notifications */}
+      <div className="mcp-toast-stack">
+        {toasts.map((t) => (
+          <div key={t.id} className={`mcp-toast mcp-toast-${t.kind}`}>
+            {t.kind === "success" && <CheckCircle2 size={14} />}
+            {t.kind === "error" && <XCircle size={14} />}
+            {t.kind === "info" && <AlertCircle size={14} />}
+            <span>{t.message}</span>
+          </div>
+        ))}
+      </div>
+
       {/* 1. Header Banner */}
       <div className="view-header">
         <div>
@@ -299,8 +343,23 @@ export const DevicesView: React.FC<DevicesViewProps> = ({
 
                 <div className="rich-card-footer">
                   <span className="footer-status-text">
-                    {isOnline ? "✓ Ready for deployment & log stream" : "Device unreachable"}
+                    {isOnline ? "✓ Ready for deployment & log stream" : "Device offline"}
                   </span>
+                  {d.is_emulator && !isOnline && (
+                    <button
+                      className="btn-glass btn-sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleBoot(d.id);
+                      }}
+                      disabled={bootingName === d.id}
+                      title={`Boot virtual device '${d.name}'`}
+                      style={{ padding: "2px 8px", fontSize: "10.5px" }}
+                    >
+                      <Play size={10} fill="currentColor" color="#10b981" />
+                      <span>{bootingName === d.id ? "Booting..." : "Boot Device"}</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );

@@ -149,6 +149,49 @@ export function useDevFlowApi() {
     [apiBase]
   );
 
+  const executeTargetAction = useCallback(
+    async (
+      targetId: string,
+      targetPath: string,
+      framework: string,
+      action: string,
+      deviceId?: string,
+      port?: number
+    ): Promise<{ success: boolean; message?: string; error?: string }> => {
+      try {
+        const res = await fetch(`${apiBase}/api/target/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            target_id: targetId,
+            target_path: targetPath,
+            framework,
+            action,
+            device_id: deviceId || null,
+            port: port || null,
+          }),
+        });
+        if (!res.ok) {
+          if (res.status === 404) {
+            return {
+              success: false,
+              error: "API route not active: Please restart or update devflow-gui binary to enable custom target actions.",
+            };
+          }
+          const text = await res.text();
+          return { success: false, error: text || `HTTP ${res.status}` };
+        }
+        return await res.json();
+      } catch (e: any) {
+        return {
+          success: false,
+          error: e?.message || "Failed to reach DevFlow backend server.",
+        };
+      }
+    },
+    [apiBase]
+  );
+
   const reloadAll = useCallback(async (): Promise<{ success: boolean; message?: string }> => {
     const res = await fetch(`${apiBase}/api/workspace/reload-all`, { method: "POST" });
     return await res.json();
@@ -332,6 +375,7 @@ export function useDevFlowApi() {
       stopTarget,
       reloadTarget,
       restartTarget,
+      executeTargetAction,
       reloadAll,
       restartAll,
       runDoctor,
@@ -360,6 +404,7 @@ export function useDevFlowApi() {
       stopTarget,
       reloadTarget,
       restartTarget,
+      executeTargetAction,
       reloadAll,
       restartAll,
       runDoctor,

@@ -74,7 +74,13 @@ impl PlatformRunner for AndroidPlatformRunner {
         let output = cmd
             .output()
             .await
-            .map_err(|e| DevflowError::Install(format!("Failed to run adb install: {}", e)))?;
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::NotFound {
+                    DevflowError::Install("Android platform-tools ('adb') not found. Please install Android SDK platform-tools and ensure ANDROID_HOME is set.".to_string())
+                } else {
+                    DevflowError::Install(format!("Failed to run adb install: {}", e))
+                }
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);

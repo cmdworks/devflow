@@ -51,7 +51,11 @@ impl PlatformRunner for ApplePlatformRunner {
                 .output()
                 .await
                 .map_err(|e| {
-                    DevflowError::Install(format!("xcrun simctl install failed: {}", e))
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        DevflowError::Install("Xcode command line tool ('xcrun' / 'simctl') not found. Please install Xcode and run 'xcode-select --install'.".to_string())
+                    } else {
+                        DevflowError::Install(format!("xcrun simctl install failed: {}", e))
+                    }
                 })?;
 
             if !output.status.success() {
@@ -76,7 +80,11 @@ impl PlatformRunner for ApplePlatformRunner {
                 .output()
                 .await
                 .map_err(|e| {
-                    DevflowError::Install(format!("xcrun devicectl install failed: {}", e))
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        DevflowError::Install("Xcode command line tool ('xcrun' / 'devicectl') not found. Please install Xcode and run 'xcode-select --install'.".to_string())
+                    } else {
+                        DevflowError::Install(format!("xcrun devicectl install failed: {}", e))
+                    }
                 })?;
 
             if !output.status.success() {

@@ -79,8 +79,27 @@ impl DeviceManager {
     }
 
     pub async fn boot_device(target_id: &str) -> Result<String, String> {
-        // If it's a simulator UDID or iOS simulator name
-        if target_id.contains('-') && target_id.len() >= 36 {
+        let all_devices = Self::discover_all().await;
+        if let Some(d) = all_devices.iter().find(|d| {
+            d.id == target_id
+                || d.name.eq_ignore_ascii_case(target_id)
+                || d.name.to_lowercase().starts_with(&target_id.to_lowercase())
+        }) {
+            if d.platform == Platform::Ios || d.platform == Platform::Apple {
+                return AppleDiscoverer::boot_simulator(&d.id).await;
+            } else if d.platform == Platform::Android {
+                let clean_name = d.id.strip_prefix("avd:").unwrap_or(&d.id);
+                return EmulatorManager::boot_avd(clean_name).await;
+            }
+        }
+
+        // If target looks like iOS simulator UDID or device name
+        let lower = target_id.to_lowercase();
+        if (target_id.contains('-') && target_id.len() >= 36)
+            || lower.contains("iphone")
+            || lower.contains("ipad")
+            || lower.contains("ios")
+        {
             return AppleDiscoverer::boot_simulator(target_id).await;
         }
 

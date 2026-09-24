@@ -110,26 +110,75 @@ impl AppleDiscoverer {
         devices
     }
 
-    pub async fn boot_simulator(udid: &str) -> Result<String, String> {
+    pub async fn boot_simulator(target: &str) -> Result<String, String> {
+        let xcrun_bin = crate::emulator::which_binary("xcrun")
+            .or_else(|_| {
+                let candidate = std::path::PathBuf::from("/usr/bin/xcrun");
+                if candidate.exists() {
+                    Ok(candidate)
+                } else {
+                    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "xcrun not found"))
+                }
+            })
+            .map_err(|_| {
+                "Xcode Command Line Tools ('xcrun' / 'simctl') not found. Please ensure Xcode is installed and run 'xcode-select --install'.".to_string()
+            })?;
+
+        // Resolve target to UDID if it was passed as a simulator name
+        let mut udid = target.to_string();
+        let is_udid = target.contains('-') && target.len() >= 36;
+        if !is_udid {
+            let discovered = Self::discover().await;
+            if let Some(matched) = discovered.iter().find(|d| {
+                d.id == target
+                    || d.name.eq_ignore_ascii_case(target)
+                    || d.name.to_lowercase().starts_with(&target.to_lowercase())
+            }) {
+                udid = matched.id.clone();
+            } else {
+                let available_names: Vec<String> = discovered
+                    .iter()
+                    .filter(|d| d.is_emulator)
+                    .map(|d| d.name.clone())
+                    .collect();
+                let names_str = if available_names.is_empty() {
+                    "none (install runtimes in Xcode > Settings > Platforms)".to_string()
+                } else {
+                    available_names.join(", ")
+                };
+                return Err(format!(
+                    "iOS Simulator '{}' not found in xcrun simctl. Available simulators: [{}].",
+                    target, names_str
+                ));
+            }
+        }
+
         info!("Booting Apple iOS Simulator '{}'...", udid);
 
-        let output = Command::new("xcrun")
-            .args(["simctl", "boot", udid])
+        let output = Command::new(&xcrun_bin)
+            .args(["simctl", "boot", &udid])
             .output()
             .await
-            .map_err(|e| format!("Failed to boot simulator: {}", e))?;
+            .map_err(|e| format!("Failed to execute 'xcrun simctl boot': {}", e))?;
 
         // Also open Simulator.app GUI
         let _ = Command::new("open")
-            .args(["-a", "Simulator", "--args", "-CurrentDeviceUDID", udid])
+            .args(["-a", "Simulator", "--args", "-CurrentDeviceUDID", &udid])
             .output()
             .await;
 
-        if output.status.success() || String::from_utf8_lossy(&output.stderr).contains("booted") {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if output.status.success()
+            || stderr.contains("booted")
+            || stderr.contains("current state: Booted")
+        {
             Ok(format!("Simulator '{}' booted successfully", udid))
         } else {
-            let err = String::from_utf8_lossy(&output.stderr);
-            Err(format!("Failed to boot simulator: {}", err))
+            Err(format!(
+                "Failed to boot simulator '{}': {}",
+                udid,
+                stderr.trim()
+            ))
         }
     }
 

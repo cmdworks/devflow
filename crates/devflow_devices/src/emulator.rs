@@ -1,6 +1,8 @@
 use devflow_protocol::{Device, DeviceState, Platform};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::Duration;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 use tracing::info;
 
@@ -13,7 +15,7 @@ impl EmulatorManager {
             return Some(path);
         }
 
-        // 2. Check standard environment variables
+        // 2. Check standard environment variables and platform paths
         let env_roots = [
             std::env::var("ANDROID_HOME").ok(),
             std::env::var("ANDROID_SDK_ROOT").ok(),
@@ -23,12 +25,19 @@ impl EmulatorManager {
             std::env::var("HOME")
                 .ok()
                 .map(|h| format!("{}/Android/Sdk", h)),
+            std::env::var("LOCALAPPDATA")
+                .ok()
+                .map(|h| format!("{}/Android/Sdk", h)),
         ];
 
         for root in env_roots.into_iter().flatten() {
-            let candidate = Path::new(&root).join("emulator/emulator");
-            if candidate.exists() {
-                return Some(candidate);
+            let candidate1 = Path::new(&root).join("emulator/emulator");
+            if candidate1.exists() {
+                return Some(candidate1);
+            }
+            let candidate2 = Path::new(&root).join("tools/emulator");
+            if candidate2.exists() {
+                return Some(candidate2);
             }
         }
 
@@ -74,25 +83,60 @@ impl EmulatorManager {
 
     pub async fn boot_avd(avd_name: &str) -> Result<String, String> {
         let emulator_bin = Self::find_emulator_binary().ok_or_else(|| {
-            "Android SDK 'emulator' tool not found. Ensure ANDROID_HOME is set.".to_string()
+            "Android SDK 'emulator' tool not found. Ensure Android SDK is installed and ANDROID_HOME or ANDROID_SDK_ROOT is set (e.g. export ANDROID_HOME=$HOME/Library/Android/sdk).".to_string()
         })?;
+
+        let available_avds = Self::list_avds().await;
+        if !available_avds.is_empty() && !available_avds.iter().any(|a| a == avd_name) {
+            return Err(format!(
+                "Android Virtual Device '{}' not found. Available AVDs: [{}]. You can create one via Android Studio Device Manager.",
+                avd_name,
+                available_avds.join(", ")
+            ));
+        }
 
         info!("Booting Android AVD '{}'...", avd_name);
 
         let mut child = Command::new(&emulator_bin)
             .args(["-avd", avd_name, "-no-boot-anim"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| format!("Failed to spawn emulator for '{}': {}", avd_name, e))?;
+            .map_err(|e| format!("Failed to spawn emulator '{}': {}", avd_name, e))?;
+
+        // Give process a brief moment to check if it immediately crashed
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                let mut err_msg = String::new();
+                if let Some(mut stderr) = child.stderr.take() {
+                    let mut buf = Vec::new();
+                    let _ = stderr.read_to_end(&mut buf).await;
+                    err_msg = String::from_utf8_lossy(&buf).trim().to_string();
+                }
+                return Err(format!(
+                    "Android emulator failed to start (exit code {}): {}",
+                    status.code().unwrap_or(-1),
+                    if err_msg.is_empty() {
+                        "Check AVD configuration and hardware virtualization"
+                    } else {
+                        &err_msg
+                    }
+                ));
+            }
+        }
 
         // Detach process so it keeps running
         tokio::spawn(async move {
             let _ = child.wait().await;
         });
 
-        // Wait up to 60 seconds for ADB to detect booted device
-        for _ in 0..30 {
+        let adb_bin = crate::AdbDiscoverer::resolve_adb_binary();
+
+        // Wait up to 40 seconds for ADB to detect booted device
+        for _ in 0..20 {
             tokio::time::sleep(Duration::from_secs(2)).await;
-            let output = Command::new("adb")
+            let output = Command::new(&adb_bin)
                 .args(["shell", "getprop", "sys.boot_completed"])
                 .output()
                 .await;
@@ -115,7 +159,7 @@ impl EmulatorManager {
     }
 }
 
-fn which_binary(name: &str) -> Result<PathBuf, std::io::Error> {
+pub fn which_binary(name: &str) -> Result<PathBuf, std::io::Error> {
     if let Ok(paths) = std::env::var("PATH") {
         for p in paths.split(':') {
             let candidate = Path::new(p).join(name);

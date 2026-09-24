@@ -2,10 +2,10 @@ import React from "react";
 import {
   LayoutDashboard,
   Zap,
-  Terminal,
   ChevronLeft,
   ChevronRight,
   FolderGit2,
+  Radio,
 } from "lucide-react";
 import type { ProjectTarget, PaneInfo, ViewSection, ActiveSessionInfo } from "../types";
 
@@ -13,9 +13,10 @@ interface SecondarySidebarProps {
   workspaceName: string;
   workspacePath: string;
   activeSection: ViewSection;
+  activePaneId?: string;
   targets: ProjectTarget[];
   openPanes: PaneInfo[];
-  activeSessions: ActiveSessionInfo[];
+  activeSessions?: ActiveSessionInfo[];
   isCollapsed: boolean;
   onToggleCollapse: () => void;
   onSelectSection: (section: ViewSection) => void;
@@ -26,15 +27,18 @@ interface SecondarySidebarProps {
 export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
   workspaceName,
   activeSection,
+  activePaneId,
   targets,
   openPanes,
-  activeSessions,
   isCollapsed,
   onToggleCollapse,
   onSelectSection,
   onOpenTargetPane,
+  onOpenCombinedPane,
 }) => {
-  const runningTargetsCount = activeSessions.length;
+  const runningTargetsCount = openPanes.filter(
+    (p) => !p.isCombined && (p.status === "running" || p.status === "building")
+  ).length;
 
   if (isCollapsed) {
     return (
@@ -51,7 +55,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
           <button
             className={`secondary-icon-btn ${activeSection === "overview" ? "active" : ""}`}
             onClick={() => onSelectSection("overview")}
-            title="Overview"
+            title="Overview Dashboard"
           >
             <LayoutDashboard size={14} />
           </button>
@@ -59,19 +63,56 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
           <button
             className={`secondary-icon-btn ${activeSection === "targets" ? "active" : ""}`}
             onClick={() => onSelectSection("targets")}
-            title={`Targets (${targets.length})`}
+            title={`Targets Matrix (${targets.length})`}
           >
             <Zap size={14} />
             {runningTargetsCount > 0 && <span className="icon-pulse-badge" />}
           </button>
 
           <button
-            className={`secondary-icon-btn ${activeSection === "terminal" ? "active" : ""}`}
-            onClick={() => onSelectSection("terminal")}
-            title="Terminal Logs"
+            className={`secondary-icon-btn ${
+              activeSection === "terminal" && activePaneId === "pane-combined" ? "active" : ""
+            }`}
+            onClick={() => {
+              onOpenCombinedPane();
+              onSelectSection("terminal");
+            }}
+            title="Combined Live Stream"
           >
-            <Terminal size={14} />
+            <Radio size={14} color="#06b6d4" />
           </button>
+
+          <div className="collapsed-divider" />
+
+          {targets.map((target) => {
+            const pane = openPanes.find((p) => p.targetId === target.id);
+            const status = pane ? pane.status : "idle";
+            const isActive = activeSection === "terminal" && activePaneId === `pane-${target.id}`;
+
+            return (
+              <button
+                key={target.id}
+                className={`secondary-icon-btn ${isActive ? "active" : ""}`}
+                onClick={() => {
+                  onOpenTargetPane(target);
+                  onSelectSection("terminal");
+                }}
+                title={`${target.name} [${target.framework}] (${status})`}
+              >
+                <span
+                  className={`collapsed-status-dot ${
+                    status === "running"
+                      ? "green"
+                      : status === "building"
+                      ? "yellow"
+                      : status === "error"
+                      ? "red"
+                      : "gray"
+                  }`}
+                />
+              </button>
+            );
+          })}
         </div>
       </div>
     );
@@ -96,7 +137,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
         </button>
       </div>
 
-      {/* 2. Workspace View Navigation */}
+      {/* 2. Top Views Navigation */}
       <div className="secondary-nav-section">
         <button
           className={`secondary-nav-item ${activeSection === "overview" ? "active" : ""}`}
@@ -111,48 +152,72 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
           onClick={() => onSelectSection("targets")}
         >
           <Zap size={14} />
-          <span>Targets</span>
-          {runningTargetsCount > 0 && (
-            <span className="nav-running-badge">{runningTargetsCount}</span>
-          )}
-        </button>
-
-        <button
-          className={`secondary-nav-item ${activeSection === "terminal" ? "active" : ""}`}
-          onClick={() => onSelectSection("terminal")}
-        >
-          <Terminal size={14} />
-          <span>Terminal</span>
-          <span className="nav-stream-dot" />
+          <span>Targets Matrix</span>
+          <span className="nav-count-pill">{targets.length}</span>
         </button>
       </div>
 
-      {/* 3. Subprojects & Targets Quick Jump List */}
+      {/* 3. Stream & Subprojects Cockpit List */}
       <div className="secondary-targets-section">
-        <div className="section-label">SUBPROJECTS ({targets.length})</div>
+        <div className="section-label">LIVE COCKPIT & LOGS</div>
+
+        {/* Combined All Stream Entry */}
+        <div
+          className={`secondary-target-card combined-entry ${
+            activeSection === "terminal" && activePaneId === "pane-combined" ? "active" : ""
+          }`}
+          onClick={() => {
+            onOpenCombinedPane();
+            onSelectSection("terminal");
+          }}
+          title="Open Combined Stream of all active targets"
+        >
+          <div className="target-card-main">
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Radio size={13} color="#06b6d4" />
+              <div className="target-card-name" style={{ fontWeight: 600 }}>
+                All Streams (Combined)
+              </div>
+            </div>
+            <div className="target-card-meta">
+              <span className="platform-tag universal">universal</span>
+              <span className="running-count-tag">
+                {runningTargetsCount} running
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-label" style={{ marginTop: "12px" }}>
+          SUBPROJECTS ({targets.length})
+        </div>
 
         <div className="secondary-targets-list">
           {targets.length === 0 ? (
             <div className="secondary-empty-text">No targets discovered</div>
           ) : (
             targets.map((target) => {
-              const isOpen = openPanes.some((p) => p.targetId === target.id);
               const activePane = openPanes.find((p) => p.targetId === target.id);
               const status = activePane ? activePane.status : "idle";
               const platformClass = (target.platform || "generic").toLowerCase();
+              const isSelected =
+                activeSection === "terminal" && activePaneId === `pane-${target.id}`;
 
               return (
                 <div
                   key={target.id}
-                  className={`secondary-target-card ${isOpen ? "open" : ""}`}
+                  className={`secondary-target-card ${isSelected ? "active" : ""}`}
                   onClick={() => {
                     onOpenTargetPane(target);
                     onSelectSection("terminal");
                   }}
-                  title={`Open / focus terminal pane for ${target.name}`}
+                  title={`Open / focus live cockpit & logs for ${target.name}`}
                 >
                   <div className="target-card-main">
-                    <div className="target-card-name">{target.name}</div>
+                    <div className="target-card-name-row">
+                      <span className="target-card-name">{target.name}</span>
+                      {target.is_default && <span className="default-pill mini">MAIN</span>}
+                    </div>
                     <div className="target-card-meta">
                       <span className={`platform-tag ${platformClass}`}>{target.platform}</span>
                       <span
@@ -166,7 +231,7 @@ export const SecondarySidebar: React.FC<SecondarySidebarProps> = ({
                             : "gray"
                         }`}
                       />
-                      <span>{target.framework}</span>
+                      <span className="framework-tag-mini">{target.framework}</span>
                     </div>
                   </div>
                 </div>

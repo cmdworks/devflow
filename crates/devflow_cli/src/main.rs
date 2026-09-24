@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
             let url = format!(
                 "http://localhost:{}?dir={}",
                 port,
-                urlencoding_simple(&dir_str)
+                dir_str.replace(' ', "%20")
             );
 
             if open_browser {
@@ -99,8 +99,4 @@ async fn main() -> anyhow::Result<()> {
             Ok(())
         }
     }
-}
-
-fn urlencoding_simple(s: &str) -> String {
-    s.replace(' ', "%20").replace('/', "%2F")
 }

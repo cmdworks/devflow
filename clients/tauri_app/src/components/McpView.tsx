@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import type { McpStatusResponse, McpAccessLogEntry, McpSessionDescriptor } from "../types";
 import type { FetchMcpLogsParams } from "../hooks/useDevFlowApi";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface McpViewProps {
   onFetchStatus: () => Promise<McpStatusResponse>;
@@ -349,14 +350,16 @@ export const McpView: React.FC<McpViewProps> = ({
     }
   };
 
-  const handleCopy = (text: string, key: string) => {
+  const handleCopy = async (text: string, key: string) => {
     if (!text || text.trim() === "" || text.trim() === "{}") {
       showToast("error", "Nothing to copy — config is empty");
       return;
     }
-    navigator.clipboard.writeText(text);
-    setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 1800);
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 1800);
+    }
   };
 
   // Use API tools if available and non-empty, otherwise show fallback catalog
@@ -945,7 +948,10 @@ export const McpView: React.FC<McpViewProps> = ({
                     <div
                       key={log.id}
                       className={`mcp-log-item ${isSuccess ? "success" : "failure"} ${isExpanded ? "expanded" : ""}`}
-                      onClick={() => setExpandedLogId(isExpanded ? null : log.id)}
+                      onClick={() => {
+                        if (window.getSelection() && window.getSelection()!.toString().length > 0) return;
+                        setExpandedLogId(isExpanded ? null : log.id);
+                      }}
                     >
                       {/* Compact / Short Header Row */}
                       <div className="log-item-main">
@@ -980,6 +986,23 @@ export const McpView: React.FC<McpViewProps> = ({
                         <div className="log-item-right">
                           <span className="log-duration-badge">{log.duration_ms}ms</span>
                           <span className="log-time-stamp">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                          <button
+                            className="log-copy-btn"
+                            title="Copy log entry to clipboard"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              const payloadStr = log.arguments ? `\nInput: ${JSON.stringify(log.arguments, null, 2)}` : "";
+                              const respStr = log.response ? `\nOutput: ${JSON.stringify(log.response, null, 2)}` : "";
+                              const errStr = log.error_message ? `\nError: ${log.error_message}` : "";
+                              const text = `[${log.timestamp}] [${log.client}] ${label} (${log.duration_ms}ms) - ${log.status}\nSummary: ${log.summary}${errStr}${payloadStr}${respStr}`;
+                              const ok = await copyToClipboard(text);
+                              if (ok) {
+                                showToast("success", "Log entry copied to clipboard");
+                              }
+                            }}
+                          >
+                            <Copy size={13} />
+                          </button>
                           <button
                             className="log-trash-btn"
                             title="Delete this log entry"

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   FolderGit2,
   Play,
@@ -9,6 +9,18 @@ import {
   Layers,
   Loader2,
   Sliders,
+  Package,
+  Trash2,
+  Globe,
+  FolderOpen,
+  CheckCircle2,
+  Smartphone,
+  AppWindow,
+  PowerOff,
+  Unplug,
+  ExternalLink,
+  ChevronDown,
+  Wrench,
 } from "lucide-react";
 import type { ProjectTarget, PaneInfo, ActiveSessionInfo } from "../types";
 
@@ -22,9 +34,11 @@ interface TargetsViewProps {
   isStoppingAll?: boolean;
   allTargetsRunning?: boolean;
   anyTargetRunning?: boolean;
+  executingActions?: Record<string, string>;
   onToggleRun: (targetId: string) => void;
   onReload: (targetId: string) => void;
   onRestart: (targetId: string) => void;
+  onExecuteAction?: (targetId: string, action: string, port?: number) => void;
   onOpenTargetPane: (target: ProjectTarget) => void;
   onRunAll: () => void;
   onReloadAll: () => void;
@@ -44,9 +58,11 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   isStoppingAll = false,
   allTargetsRunning = false,
   anyTargetRunning = false,
+  executingActions = {},
   onToggleRun,
   onReload,
   onRestart,
+  onExecuteAction = () => {},
   onOpenTargetPane,
   onRunAll,
   onReloadAll,
@@ -55,6 +71,23 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
   onOpenDevOptions,
   onSwitchToTerminal,
 }) => {
+  const [openToolsMenuTargetId, setOpenToolsMenuTargetId] = useState<string | null>(null);
+  const toolsMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(e.target as Node)) {
+        setOpenToolsMenuTargetId(null);
+      }
+    };
+    if (openToolsMenuTargetId) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [openToolsMenuTargetId]);
+
   return (
     <div className="view-container">
       {/* 1. Header & Batch Actions */}
@@ -99,7 +132,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
             disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
             title={anyTargetRunning ? "Hot reload all active sessions" : "No active sessions to reload"}
           >
-            <Zap size={13} color={anyTargetRunning ? "#f59e0b" : "var(--text-muted)"} />
+            <Zap size={13} color="#f59e0b" />
             <span>Reload All</span>
           </button>
 
@@ -107,23 +140,17 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
             className="btn-glass"
             onClick={onRestartAll}
             disabled={!anyTargetRunning || isStartingAll || isStoppingAll}
-            title={anyTargetRunning ? "Restart all active sessions" : "No active sessions to restart"}
+            title={anyTargetRunning ? "Restart all active target processes" : "No active sessions to restart"}
           >
-            <RotateCw size={13} color={anyTargetRunning ? "#06b6d4" : "var(--text-muted)"} />
+            <RotateCw size={13} color="#06b6d4" />
             <span>Restart All</span>
           </button>
 
           <button
-            className={`btn-danger ${isStoppingAll ? "loading" : ""}`}
+            className={`btn-glass ${isStoppingAll ? "loading" : ""}`}
             onClick={onStopAll}
-            disabled={isStoppingAll || !anyTargetRunning}
-            title={
-              isStoppingAll
-                ? "Stopping running processes..."
-                : !anyTargetRunning
-                ? "No running processes to stop"
-                : "Stop all running processes"
-            }
+            disabled={!anyTargetRunning || isStoppingAll || isStartingAll}
+            title={anyTargetRunning ? "Stop all running target processes" : "No running targets to stop"}
           >
             {isStoppingAll ? (
               <Loader2 size={13} className="animate-spin" />
@@ -174,6 +201,19 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
             );
 
             const platformClass = (target.platform || "generic").toLowerCase();
+            const fw = (target.framework || "").toLowerCase();
+            const isAndroid = fw.includes("kotlin") || fw.includes("android");
+            const isSwift = fw.includes("swift") || fw.includes("apple") || fw.includes("xcode");
+            const isRust = fw.includes("rust") || fw.includes("tauri") || fw.includes("cargo");
+            const isWeb =
+              fw.includes("web") ||
+              fw.includes("react") ||
+              fw.includes("node") ||
+              fw.includes("generic") ||
+              fw.includes("next");
+
+            const isCurrentExecuting = executingActions[target.id];
+            const isToolsMenuOpen = openToolsMenuTargetId === target.id;
 
             return (
               <div key={target.id} className={`target-card ${status}-border`}>
@@ -230,11 +270,12 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                   )}
                 </div>
 
+                {/* Primary Card Controls */}
                 <div className="target-card-actions">
                   <button
                     className={`target-btn-action ${isRunning || isBuilding ? "stop-btn" : "run-btn"}`}
                     onClick={() => onToggleRun(target.id)}
-                    title={isRunning || isBuilding ? "Stop Target" : "Run Target"}
+                    title={isRunning || isBuilding ? "Stop Target Process" : "Build & Run Target"}
                   >
                     {isRunning || isBuilding ? (
                       <>
@@ -269,11 +310,262 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                     <span>Restart</span>
                   </button>
 
+                  {/* Clean Tools Dropdown Popover */}
+                  <div className="tools-dropdown-anchor" style={{ position: "relative" }}>
+                    <button
+                      className={`target-btn-action glass ${isToolsMenuOpen ? "active" : ""}`}
+                      onClick={() => setOpenToolsMenuTargetId(isToolsMenuOpen ? null : target.id)}
+                      title="Framework & Device Tools"
+                    >
+                      {isCurrentExecuting ? (
+                        <Loader2 size={13} className="animate-spin text-cyan" />
+                      ) : (
+                        <Wrench size={13} color="#38bdf8" />
+                      )}
+                      <span>Tools</span>
+                      <ChevronDown size={11} />
+                    </button>
+
+                    {isToolsMenuOpen && (
+                      <div ref={toolsMenuRef} className="target-tools-popover">
+                        <div className="tools-popover-header">
+                          <span>{target.framework} Actions</span>
+                        </div>
+
+                        {isAndroid && (
+                          <>
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "reinstall_apk");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Package size={13} color="#10b981" />
+                              <div className="popover-action-text">
+                                <strong>Install APK</strong>
+                                <span>Compile & push to device via Gradle</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "launch_app");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Smartphone size={13} color="#10b981" />
+                              <div className="popover-action-text">
+                                <strong>Launch App Activity</strong>
+                                <span>Start launcher activity on device</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item danger"
+                              onClick={() => {
+                                onExecuteAction(target.id, "force_stop");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <PowerOff size={13} color="#f43f5e" />
+                              <div className="popover-action-text">
+                                <strong>Kill App Process</strong>
+                                <span>am force-stop package</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "clear_data");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Trash2 size={13} color="#94a3b8" />
+                              <div className="popover-action-text">
+                                <strong>Clear App Data & Cache</strong>
+                                <span>pm clear package state</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "open_ide");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <ExternalLink size={13} color="#38bdf8" />
+                              <div className="popover-action-text">
+                                <strong>Open in Android Studio</strong>
+                                <span>Launch project in Studio</span>
+                              </div>
+                            </button>
+                          </>
+                        )}
+
+                        {isSwift && (
+                          <>
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "launch_app");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <AppWindow size={13} color="#f97316" />
+                              <div className="popover-action-text">
+                                <strong>Launch Swift App</strong>
+                                <span>Run compiled binary / app</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item danger"
+                              onClick={() => {
+                                onExecuteAction(target.id, "force_stop");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <PowerOff size={13} color="#f43f5e" />
+                              <div className="popover-action-text">
+                                <strong>Terminate App</strong>
+                                <span>Kill running Swift process</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "clean_cache");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Trash2 size={13} color="#94a3b8" />
+                              <div className="popover-action-text">
+                                <strong>Clean Build Cache</strong>
+                                <span>swift package clean</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "open_ide");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <ExternalLink size={13} color="#38bdf8" />
+                              <div className="popover-action-text">
+                                <strong>Open in Xcode</strong>
+                                <span>Launch project in Xcode IDE</span>
+                              </div>
+                            </button>
+                          </>
+                        )}
+
+                        {isRust && (
+                          <>
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "clippy_scan");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <CheckCircle2 size={13} color="#f59e0b" />
+                              <div className="popover-action-text">
+                                <strong>Cargo Clippy</strong>
+                                <span>Run Rust linter inspection</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "reveal_finder");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <FolderOpen size={13} color="#38bdf8" />
+                              <div className="popover-action-text">
+                                <strong>Reveal in Finder</strong>
+                                <span>Open project in macOS Finder</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "open_ide");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <ExternalLink size={13} color="#38bdf8" />
+                              <div className="popover-action-text">
+                                <strong>Open in IDE</strong>
+                                <span>Launch in VS Code / Cursor</span>
+                              </div>
+                            </button>
+                          </>
+                        )}
+
+                        {isWeb && (
+                          <>
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "open_browser");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Globe size={13} color="#3b82f6" />
+                              <div className="popover-action-text">
+                                <strong>Open in Browser</strong>
+                                <span>Launch default web browser</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item danger"
+                              onClick={() => {
+                                onExecuteAction(target.id, "free_port");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Unplug size={13} color="#ef4444" />
+                              <div className="popover-action-text">
+                                <strong>Free Conflicting Port</strong>
+                                <span>Kill stuck dev server port listener</span>
+                              </div>
+                            </button>
+
+                            <button
+                              className="popover-action-item"
+                              onClick={() => {
+                                onExecuteAction(target.id, "clean_cache");
+                                setOpenToolsMenuTargetId(null);
+                              }}
+                            >
+                              <Trash2 size={13} color="#94a3b8" />
+                              <div className="popover-action-text">
+                                <strong>Clean Dev Cache</strong>
+                                <span>Purge Vite / Next.js cache</span>
+                              </div>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {onOpenDevOptions && (
                     <button
                       className="target-btn-action glass"
                       onClick={() => onOpenDevOptions(target.id)}
-                      title="Configure Runner / Dev Server Options for this Target"
+                      title="Configure Runner / Dev Server Options"
                     >
                       <Sliders size={13} color="#38bdf8" />
                       <span>Options</span>
@@ -286,7 +578,7 @@ export const TargetsView: React.FC<TargetsViewProps> = ({
                       onOpenTargetPane(target);
                       onSwitchToTerminal(`pane-${target.id}`);
                     }}
-                    title="Open in Terminal Tab & View Live Logs"
+                    title="Open in Live Cockpit & View Logs"
                   >
                     <Terminal size={13} />
                     <span>Logs</span>

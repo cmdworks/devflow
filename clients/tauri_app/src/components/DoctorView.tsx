@@ -18,6 +18,7 @@ import {
   CheckCheck,
 } from "lucide-react";
 import type { DoctorReport, DoctorCheck } from "../types";
+import { copyToClipboard } from "../utils/clipboard";
 
 interface DoctorViewProps {
   report: DoctorReport | null;
@@ -34,10 +35,12 @@ export const DoctorView: React.FC<DoctorViewProps> = ({
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "passed" | "warning" | "failed">("all");
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedHint(text);
-    setTimeout(() => setCopiedHint(null), 1800);
+  const handleCopy = async (text: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedHint(text);
+      setTimeout(() => setCopiedHint(null), 1800);
+    }
   };
 
   const summary = useMemo(() => {

@@ -138,14 +138,16 @@ impl PlatformRunner for DesktopPlatformRunner {
         let stderr = child.stderr.take();
 
         let handle = tokio::spawn(async move {
+            let tx_out = tx.clone();
             let tx_err = tx.clone();
+            let tx_exit = tx;
 
             let stdout_task = tokio::spawn(async move {
                 if let Some(out) = stdout {
                     let mut reader = BufReader::new(out).lines();
                     while let Ok(Some(line)) = reader.next_line().await {
                         let entry = LogParser::parse_line(&line, Some("stdout"));
-                        if tx.send(entry).await.is_err() {
+                        if tx_out.send(entry).await.is_err() {
                             break;
                         }
                     }
@@ -168,6 +170,13 @@ impl PlatformRunner for DesktopPlatformRunner {
             });
 
             let _ = tokio::join!(stdout_task, stderr_task);
+
+            let mut exit_entry = LogEntry::new(
+                LogLevel::I,
+                "■ Process stream ended / process terminated.".to_string(),
+            );
+            exit_entry.tag = Some("lifecycle".to_string());
+            let _ = tx_exit.send(exit_entry).await;
         });
 
         Ok(handle)
